@@ -1,7 +1,7 @@
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #f8fafc;
-  background: #111827;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  color: #eaf4ec;
+  background: #080e12;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -20,6 +20,10 @@ body,
 
 body {
   overflow: hidden;
+  background-color: #080e12;
+  background-image: linear-gradient(rgb(69 112 102 / 8%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(69 112 102 / 8%) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
 
 #app {
@@ -29,14 +33,18 @@ body {
 }
 
 #game {
-  width: min(100%, 960px);
-  height: min(100%, 640px);
-  min-height: 320px;
-  border-radius: 12px;
+  width: min(100%, 960px, calc((100dvh - 32px) * 1.5));
+  aspect-ratio: 3 / 2;
+  max-height: calc(100dvh - 32px);
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 12px 48px rgb(0 0 0 / 35%);
+  background: #101a21;
+  box-shadow: 0 20px 80px rgb(0 0 0 / 48%), 0 0 0 1px rgb(137 194 175 / 18%);
 }
 
 canvas {
   display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
 }
