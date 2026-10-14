@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ArenaScene } from './ArenaScene';
+import { DefenseScene } from './DefenseScene';
 
 export function createGame(parent: string): Phaser.Game {
   const config: Phaser.Types.Core.GameConfig = {
@@ -7,8 +7,8 @@ export function createGame(parent: string): Phaser.Game {
     parent,
     width: 960,
     height: 640,
-    backgroundColor: '#0b1117',
-    scene: [ArenaScene],
+    backgroundColor: '#0c1419',
+    scene: [DefenseScene],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
