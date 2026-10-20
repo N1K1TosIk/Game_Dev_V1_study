@@ -76,6 +76,7 @@ interface Keys {
   s: Phaser.Input.Keyboard.Key;
   space: Phaser.Input.Keyboard.Key;
   q: Phaser.Input.Keyboard.Key;
+  p: Phaser.Input.Keyboard.Key;
   escape: Phaser.Input.Keyboard.Key;
   enter: Phaser.Input.Keyboard.Key;
   r: Phaser.Input.Keyboard.Key;
@@ -349,6 +350,7 @@ export class DefenseScene extends Phaser.Scene {
       s: Phaser.Input.Keyboard.KeyCodes.S,
       space: Phaser.Input.Keyboard.KeyCodes.SPACE,
       q: Phaser.Input.Keyboard.KeyCodes.Q,
+      p: Phaser.Input.Keyboard.KeyCodes.P,
       escape: Phaser.Input.Keyboard.KeyCodes.ESC,
       enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
       r: Phaser.Input.Keyboard.KeyCodes.R,
@@ -401,7 +403,7 @@ export class DefenseScene extends Phaser.Scene {
         align: 'center', lineSpacing: 9,
       }).setOrigin(0.5);
     const controls = this.add.text(GAME_WIDTH / 2, 350,
-      'WASD / стрелки — движение   •   Пробел — огонь   •   Q — ЭМИ', {
+      'WASD / стрелки — движение   •   Пробел — огонь   •   Q — ЭМИ   •   P / Esc — пауза', {
         fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#91aaa0',
       }).setOrigin(0.5);
     this.modal.add([overlay, panel, title, pitch, controls]);
@@ -483,7 +485,8 @@ export class DefenseScene extends Phaser.Scene {
   private updatePausedKeys(): void {
     if (this.mode === 'menu' && Phaser.Input.Keyboard.JustDown(this.keys.enter)) {
       this.startGame();
-    } else if (this.mode === 'paused' && Phaser.Input.Keyboard.JustDown(this.keys.escape)) {
+    } else if (this.mode === 'paused'
+      && (Phaser.Input.Keyboard.JustDown(this.keys.escape) || Phaser.Input.Keyboard.JustDown(this.keys.p))) {
       this.resumeGame();
     } else if (this.mode === 'gameover' && Phaser.Input.Keyboard.JustDown(this.keys.r)) {
       this.startGame();
@@ -491,7 +494,7 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private movePlayer(seconds: number): void {
-    if (Phaser.Input.Keyboard.JustDown(this.keys.escape)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.escape) || Phaser.Input.Keyboard.JustDown(this.keys.p)) {
       this.togglePause();
       return;
     }
