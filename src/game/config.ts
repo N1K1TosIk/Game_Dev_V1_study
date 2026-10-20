@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import { DefenseScene } from './DefenseScene';
+import { GAMEPLAY_CONFIG } from './gameplayConfig';
 
 export function createGame(parent: string): Phaser.Game {
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     parent,
-    width: 960,
-    height: 640,
+    width: GAMEPLAY_CONFIG.scene.width,
+    height: GAMEPLAY_CONFIG.scene.height,
     backgroundColor: '#0c1419',
     scene: [DefenseScene],
     scale: {

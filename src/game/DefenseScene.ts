@@ -1,24 +1,15 @@
 import Phaser from 'phaser';
-
-const GAME_WIDTH = 960;
-const GAME_HEIGHT = 640;
-const PLAYER_SPEED = 230;
-const PLAYER_MAX_HEALTH = 100;
-const PULSE_RADIUS = 128;
-const PULSE_COOLDOWN = 8;
-const PHASE_TWO_ANNOUNCEMENT_SECONDS = 3;
-const PHASE_TWO_ENEMY_SPEED_MULTIPLIER = 1.3;
-const PHASE_TWO_SPAWN_INTERVAL_MULTIPLIER = 0.75;
+import {
+  GAMEPLAY_CONFIG,
+  type EnemyKind,
+  type EnemySpec,
+  type Point,
+  type TowerKind,
+  type TowerSpec,
+  type WeaponKind,
+} from './gameplayConfig';
 
 type Mode = 'menu' | 'playing' | 'phase-transition' | 'paused' | 'gameover';
-type EnemyKind = 'scout' | 'raider' | 'brute' | 'boss';
-type TowerKind = 'cannon' | 'rapid' | 'cryo';
-type WeaponKind = 'pulse' | 'rail' | 'scatter';
-
-interface Point {
-  x: number;
-  y: number;
-}
 
 interface Enemy {
   body: Phaser.GameObjects.Arc;
@@ -88,63 +79,14 @@ interface Keys {
   three: Phaser.Input.Keyboard.Key;
 }
 
-interface TowerSpec {
-  name: string;
-  label: string;
-  cost: number;
-  color: number;
-  projectileColor: number;
-  damage: number;
-  fireInterval: number;
-  range: number;
-  upgradeDescription: string;
-}
-
-const TOWER_SPECS: Record<TowerKind, TowerSpec> = {
-  cannon: {
-    name: 'Пушка', label: 'ПУШКА · 35', cost: 35, color: 0xc77b54, projectileColor: 0xffbd75,
-    damage: 31, fireInterval: 1.08, range: 158, upgradeDescription: 'урон +12, радиус взрыва +12',
-  },
-  rapid: {
-    name: 'Скорострел', label: 'РАПИД · 50', cost: 50, color: 0x4ea88d, projectileColor: 0x8ef5c8,
-    damage: 13, fireInterval: 0.34, range: 138, upgradeDescription: 'скорострельность +18%, дальность +10',
-  },
-  cryo: {
-    name: 'Крио-башня', label: 'КРИО · 60', cost: 60, color: 0x598fc2, projectileColor: 0x8bdcff,
-    damage: 10, fireInterval: 0.88, range: 162, upgradeDescription: 'замедление сильнее и дольше',
-  },
-};
-
-const ROUTE: Point[] = [
-  { x: -18, y: 188 },
-  { x: 208, y: 188 },
-  { x: 208, y: 438 },
-  { x: 438, y: 438 },
-  { x: 438, y: 164 },
-  { x: 690, y: 164 },
-  { x: 690, y: 470 },
-  { x: 978, y: 470 },
-];
-
-const SOCKETS: Point[] = [
-  { x: 100, y: 320 },
-  { x: 300, y: 300 },
-  { x: 300, y: 540 },
-  { x: 360, y: 320 },
-  { x: 560, y: 120 },
-  { x: 580, y: 320 },
-  { x: 820, y: 320 },
-  { x: 840, y: 560 },
-];
-
 export class DefenseScene extends Phaser.Scene {
   private mode: Mode = 'menu';
   private keys!: Keys;
   private player!: Phaser.GameObjects.Arc;
   private playerBarrel!: Phaser.GameObjects.Rectangle;
-  private playerHealth = PLAYER_MAX_HEALTH;
-  private playerX = 88;
-  private playerY = 340;
+  private playerHealth: number = GAMEPLAY_CONFIG.player.maxHealth;
+  private playerX: number = GAMEPLAY_CONFIG.player.start.x;
+  private playerY: number = GAMEPLAY_CONFIG.player.start.y;
   private playerFireCooldown = 0;
   private playerDamageCooldown = 0;
   private pulseCooldown = 0;
@@ -164,8 +106,8 @@ export class DefenseScene extends Phaser.Scene {
   private weaponButtons: Phaser.GameObjects.Rectangle[] = [];
 
   private wave = 0;
-  private baseHealth = 100;
-  private coins = 110;
+  private baseHealth: number = GAMEPLAY_CONFIG.base.maxHealth;
+  private coins = GAMEPLAY_CONFIG.economy.startingCoins;
   private kills = 0;
   private spawnCooldown = 0;
   private waveDelay = 0;
@@ -211,7 +153,7 @@ export class DefenseScene extends Phaser.Scene {
       return;
     }
 
-    const seconds = Math.min(delta / 1000, 0.05);
+    const seconds = Math.min(delta / 1000, GAMEPLAY_CONFIG.scene.deltaLimitSeconds);
     this.playerFireCooldown = Math.max(0, this.playerFireCooldown - seconds);
     this.playerDamageCooldown = Math.max(0, this.playerDamageCooldown - seconds);
     this.pulseCooldown = Math.max(0, this.pulseCooldown - seconds);
@@ -227,33 +169,49 @@ export class DefenseScene extends Phaser.Scene {
 
   private drawMap(): void {
     this.cameras.main.setBackgroundColor('#0c1419');
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x101a20);
+    this.add.rectangle(
+      GAMEPLAY_CONFIG.scene.width / 2,
+      GAMEPLAY_CONFIG.scene.height / 2,
+      GAMEPLAY_CONFIG.scene.width,
+      GAMEPLAY_CONFIG.scene.height,
+      0x101a20,
+    );
 
     const grid = this.add.graphics();
     grid.lineStyle(1, 0x1d2c30, 0.7);
-    for (let x = 20; x < GAME_WIDTH; x += 40) grid.lineBetween(x, 104, x, GAME_HEIGHT);
-    for (let y = 120; y < GAME_HEIGHT; y += 40) grid.lineBetween(0, y, GAME_WIDTH, y);
+    for (let x = 20; x < GAMEPLAY_CONFIG.scene.width; x += 40) {
+      grid.lineBetween(x, 104, x, GAMEPLAY_CONFIG.scene.height);
+    }
+    for (let y = 120; y < GAMEPLAY_CONFIG.scene.height; y += 40) {
+      grid.lineBetween(0, y, GAMEPLAY_CONFIG.scene.width, y);
+    }
 
     const road = this.add.graphics();
     road.lineStyle(52, 0x3a4544, 1);
-    for (let index = 0; index < ROUTE.length - 1; index += 1) {
-      const start = ROUTE[index];
-      const end = ROUTE[index + 1];
+    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
+      const start = GAMEPLAY_CONFIG.route[index];
+      const end = GAMEPLAY_CONFIG.route[index + 1];
       if (start && end) road.lineBetween(start.x, start.y, end.x, end.y);
     }
     road.lineStyle(2, 0x9eaa8e, 0.65);
-    for (let index = 0; index < ROUTE.length - 1; index += 1) {
-      const start = ROUTE[index];
-      const end = ROUTE[index + 1];
+    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
+      const start = GAMEPLAY_CONFIG.route[index];
+      const end = GAMEPLAY_CONFIG.route[index + 1];
       if (start && end) road.lineBetween(start.x, start.y, end.x, end.y);
     }
 
-    this.add.rectangle(GAME_WIDTH / 2, 102, GAME_WIDTH, 4, 0x405450).setDepth(4);
+    this.add.rectangle(
+      GAMEPLAY_CONFIG.scene.width / 2,
+      102,
+      GAMEPLAY_CONFIG.scene.width,
+      4,
+      0x405450,
+    ).setDepth(4);
     this.add.text(22, 113, 'МАРШРУТ ВРАГА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#879890',
     });
 
-    this.slots = SOCKETS.map(({ x, y }) => {
+    this.slots = GAMEPLAY_CONFIG.buildSlots.map(({ x, y }) => {
       const marker = this.add.circle(x, y, 20, 0x1b292b, 0.96)
         .setStrokeStyle(2, 0x8da491)
         .setInteractive({ useHandCursor: true });
@@ -276,8 +234,8 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private createHud(): void {
-    this.add.rectangle(GAME_WIDTH / 2, 51, GAME_WIDTH, 102, 0x111d21).setDepth(10);
-    this.add.rectangle(GAME_WIDTH / 2, 102, GAME_WIDTH, 2, 0x405450).setDepth(11);
+    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 51, GAMEPLAY_CONFIG.scene.width, 102, 0x111d21).setDepth(10);
+    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 102, GAMEPLAY_CONFIG.scene.width, 2, 0x405450).setDepth(11);
 
     this.add.text(22, 14, 'LAST LINE', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '18px', fontStyle: 'bold', color: '#d8f4dd',
@@ -307,8 +265,8 @@ export class DefenseScene extends Phaser.Scene {
     this.upgradeLabel = this.add.text(842, 71, 'ВЫБЕРИ БАШНЮ', this.hudStyle(9, '#a6b8ae'))
       .setOrigin(0.5).setDepth(13);
 
-    this.add.rectangle(GAME_WIDTH / 2, 613, GAME_WIDTH, 54, 0x111d21).setDepth(10);
-    this.add.rectangle(GAME_WIDTH / 2, 586, GAME_WIDTH, 2, 0x405450).setDepth(11);
+    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 613, GAMEPLAY_CONFIG.scene.width, 54, 0x111d21).setDepth(10);
+    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 586, GAMEPLAY_CONFIG.scene.width, 2, 0x405450).setDepth(11);
     this.weaponNameText = this.add.text(22, 603, 'ОРУЖИЕ', this.hudStyle(10, '#9eafa7')).setDepth(12);
     this.addWeaponButton('pulse', 178);
     this.addWeaponButton('rail', 326);
@@ -317,11 +275,11 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private addTowerTypeButton(kind: TowerKind, x: number): void {
-    const spec = TOWER_SPECS[kind];
+    const spec = GAMEPLAY_CONFIG.tower[kind];
     const button = this.add.rectangle(x, 71, 112, 30, 0x263b38)
       .setStrokeStyle(1, spec.color).setInteractive({ useHandCursor: true }).setDepth(12);
     button.on('pointerdown', () => this.selectTowerKind(kind));
-    this.add.text(x, 71, spec.label, this.hudStyle(8, '#d9e8dc')).setOrigin(0.5).setDepth(13);
+    this.add.text(x, 71, `${spec.shortLabel} · ${spec.cost}`, this.hudStyle(8, '#d9e8dc')).setOrigin(0.5).setDepth(13);
     this.towerTypeButtons.push(button);
   }
 
@@ -343,9 +301,15 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private createActors(): void {
-    this.player = this.add.circle(this.playerX, this.playerY, 15, 0x40d9bd)
+    this.player = this.add.circle(this.playerX, this.playerY, GAMEPLAY_CONFIG.player.radius, 0x40d9bd)
       .setStrokeStyle(3, 0xd0ffdd).setDepth(7);
-    this.playerBarrel = this.add.rectangle(this.playerX + 15, this.playerY, 22, 6, 0xf4fff8).setDepth(8);
+    this.playerBarrel = this.add.rectangle(
+      this.playerX + GAMEPLAY_CONFIG.player.barrelOffset,
+      this.playerY,
+      GAMEPLAY_CONFIG.player.barrelLength,
+      GAMEPLAY_CONFIG.player.barrelThickness,
+      0xf4fff8,
+    ).setDepth(8);
     this.createMobileButtons();
   }
 
@@ -403,23 +367,45 @@ export class DefenseScene extends Phaser.Scene {
     this.mode = 'menu';
     this.modal?.destroy(true);
     this.modal = this.add.container(0, 0).setDepth(100);
-    const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x071015, 0.86);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 630, 380, 0x142126)
+    const overlay = this.add.rectangle(
+      GAMEPLAY_CONFIG.scene.width / 2,
+      GAMEPLAY_CONFIG.scene.height / 2,
+      GAMEPLAY_CONFIG.scene.width,
+      GAMEPLAY_CONFIG.scene.height,
+      0x071015,
+      0.86,
+    );
+    const panel = this.add.rectangle(
+      GAMEPLAY_CONFIG.scene.width / 2,
+      GAMEPLAY_CONFIG.scene.height / 2,
+      630,
+      380,
+      0x142126,
+    )
       .setStrokeStyle(2, 0x4ad8b8);
-    const title = this.add.text(GAME_WIDTH / 2, 212, 'LAST LINE', {
+    const title = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 212, 'LAST LINE', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '42px', fontStyle: 'bold', color: '#c3ffdf',
     }).setOrigin(0.5);
-    const pitch = this.add.text(GAME_WIDTH / 2, 282,
+    const pitch = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 282,
       'Сдержи колонну на пути к базе.\nСтрой оборону, усиливай башни и лично вступай в бой.', {
         fontFamily: 'Trebuchet MS, sans-serif', fontSize: '18px', color: '#dbe8df',
         align: 'center', lineSpacing: 9,
       }).setOrigin(0.5);
-    const controls = this.add.text(GAME_WIDTH / 2, 350,
+    const controls = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 350,
       'WASD / стрелки — движение   •   Пробел — огонь   •   Q — ЭМИ   •   P / Esc — пауза', {
         fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#91aaa0',
       }).setOrigin(0.5);
     this.modal.add([overlay, panel, title, pitch, controls]);
-    this.addButton(this.modal, GAME_WIDTH / 2, 420, 190, 48, 'НАЧАТЬ ОБОРОНУ', () => this.startGame(), 0x208e76);
+    this.addButton(
+      this.modal,
+      GAMEPLAY_CONFIG.scene.width / 2,
+      420,
+      190,
+      48,
+      'НАЧАТЬ ОБОРОНУ',
+      () => this.startGame(),
+      0x208e76,
+    );
   }
 
   private addButton(
@@ -447,12 +433,12 @@ export class DefenseScene extends Phaser.Scene {
     this.clearRun();
     this.mode = 'playing';
     this.wave = 0;
-    this.baseHealth = 100;
-    this.coins = 110;
+    this.baseHealth = GAMEPLAY_CONFIG.base.maxHealth;
+    this.coins = GAMEPLAY_CONFIG.economy.startingCoins;
     this.kills = 0;
-    this.playerHealth = PLAYER_MAX_HEALTH;
-    this.playerX = 88;
-    this.playerY = 340;
+    this.playerHealth = GAMEPLAY_CONFIG.player.maxHealth;
+    this.playerX = GAMEPLAY_CONFIG.player.start.x;
+    this.playerY = GAMEPLAY_CONFIG.player.start.y;
     this.playerFireCooldown = 0;
     this.playerDamageCooldown = 0;
     this.pulseCooldown = 0;
@@ -464,7 +450,7 @@ export class DefenseScene extends Phaser.Scene {
     this.refreshTowerTypeButtons();
     this.refreshWeaponButtons();
     this.player.setPosition(this.playerX, this.playerY).setVisible(true).setFillStyle(0x40d9bd);
-    this.playerBarrel.setPosition(this.playerX + 15, this.playerY).setVisible(true);
+    this.playerBarrel.setPosition(this.playerX + GAMEPLAY_CONFIG.player.barrelOffset, this.playerY).setVisible(true);
     this.pointerTarget = null;
     this.statusText.setText('Построй башни на площадках или отбивай врагов лично.');
     this.launchWave();
@@ -526,7 +512,7 @@ export class DefenseScene extends Phaser.Scene {
     if (dx === 0 && dy === 0 && this.pointerTarget) {
       dx = this.pointerTarget.x - this.playerX;
       dy = this.pointerTarget.y - this.playerY;
-      if (Math.hypot(dx, dy) < 14) {
+      if (Math.hypot(dx, dy) < GAMEPLAY_CONFIG.player.touchMoveThreshold) {
         this.pointerTarget = null;
         dx = 0;
         dy = 0;
@@ -535,14 +521,22 @@ export class DefenseScene extends Phaser.Scene {
 
     if (dx !== 0 || dy !== 0) {
       const length = Math.hypot(dx, dy);
-      this.playerX += (dx / length) * PLAYER_SPEED * seconds;
-      this.playerY += (dy / length) * PLAYER_SPEED * seconds;
+      this.playerX += (dx / length) * GAMEPLAY_CONFIG.player.speed * seconds;
+      this.playerY += (dy / length) * GAMEPLAY_CONFIG.player.speed * seconds;
     }
-    this.playerX = Phaser.Math.Clamp(this.playerX, 20, GAME_WIDTH - 22);
-    this.playerY = Phaser.Math.Clamp(this.playerY, 126, GAME_HEIGHT - 24);
+    this.playerX = Phaser.Math.Clamp(
+      this.playerX,
+      GAMEPLAY_CONFIG.player.bounds.left,
+      GAMEPLAY_CONFIG.scene.width - GAMEPLAY_CONFIG.player.bounds.right,
+    );
+    this.playerY = Phaser.Math.Clamp(
+      this.playerY,
+      GAMEPLAY_CONFIG.player.bounds.top,
+      GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.player.bounds.bottom,
+    );
     this.player.setPosition(this.playerX, this.playerY);
 
-    const target = this.findClosestEnemy(this.playerX, this.playerY, 310);
+    const target = this.findClosestEnemy(this.playerX, this.playerY, GAMEPLAY_CONFIG.player.targetRange);
     if (target) {
       this.playerBarrel.setPosition(this.playerX, this.playerY)
         .setRotation(Phaser.Math.Angle.Between(this.playerX, this.playerY, target.body.x, target.body.y));
@@ -571,28 +565,33 @@ export class DefenseScene extends Phaser.Scene {
   private fireHeroWeapon(target: Enemy): void {
     const angle = Phaser.Math.Angle.Between(this.playerX, this.playerY, target.body.x, target.body.y);
     if (this.selectedWeapon === 'pulse') {
-      this.fireProjectile(this.playerX, this.playerY, target, 25, 500, 'player', { color: 0xffd078 });
-      this.playerFireCooldown = 0.34;
+      const spec = GAMEPLAY_CONFIG.weapon.pulse;
+      this.fireProjectile(this.playerX, this.playerY, target, spec.damage, spec.speed, 'player', { color: spec.color });
+      this.playerFireCooldown = spec.cooldown;
       return;
     }
 
     if (this.selectedWeapon === 'rail') {
-      this.fireProjectile(this.playerX, this.playerY, target, 62, 920, 'player', {
-        color: 0x9ce8ff,
-        pierce: 2,
-        lifetime: 1.05,
+      const spec = GAMEPLAY_CONFIG.weapon.rail;
+      this.fireProjectile(this.playerX, this.playerY, target, spec.damage, spec.speed, 'player', {
+        color: spec.color,
+        pierce: spec.pierce,
+        lifetime: spec.lifetime,
       });
-      this.playerFireCooldown = 0.78;
+      this.playerFireCooldown = spec.cooldown;
       return;
     }
 
-    for (let index = -2; index <= 2; index += 1) {
-      this.fireProjectile(this.playerX, this.playerY, target, 11, 465, 'player', {
-        color: 0xffa778,
-        lifetime: 0.55,
-      }, angle + index * 0.12);
+    const spec = GAMEPLAY_CONFIG.weapon.scatter;
+    const pelletCount = spec.pelletCount ?? 1;
+    for (let index = 0; index < pelletCount; index += 1) {
+      const spreadIndex = index - (pelletCount - 1) / 2;
+      this.fireProjectile(this.playerX, this.playerY, target, spec.damage, spec.speed, 'player', {
+        color: spec.color,
+        lifetime: spec.lifetime,
+      }, angle + spreadIndex * (spec.spreadAngle ?? 0));
     }
-    this.playerFireCooldown = 0.72;
+    this.playerFireCooldown = spec.cooldown;
   }
 
   private selectTowerKind(kind: TowerKind): void {
@@ -600,7 +599,7 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTower = null;
     this.showTowerRange(null);
     this.refreshTowerTypeButtons();
-    const spec = TOWER_SPECS[kind];
+    const spec = GAMEPLAY_CONFIG.tower[kind];
     this.statusText.setText(`${spec.name.toUpperCase()} · ${spec.cost} МОНЕТ · ${spec.upgradeDescription}`);
     this.refreshUpgradeButton();
   }
@@ -610,8 +609,8 @@ export class DefenseScene extends Phaser.Scene {
       const kind = (['cannon', 'rapid', 'cryo'] as const)[index];
       if (!kind) return;
       const selected = kind === this.selectedTowerKind;
-      button.setFillStyle(selected ? TOWER_SPECS[kind].color : 0x263b38);
-      button.setAlpha(selected ? 1 : 0.82);
+      button.setFillStyle(selected ? GAMEPLAY_CONFIG.tower[kind].color : 0x263b38);
+      button.setAlpha(selected ? 1 : GAMEPLAY_CONFIG.ui.unselectedButtonAlpha);
     });
   }
 
@@ -632,21 +631,27 @@ export class DefenseScene extends Phaser.Scene {
       if (!kind) return;
       const selected = kind === this.selectedWeapon;
       button.setFillStyle(selected ? 0x397960 : 0x263b38);
-      button.setAlpha(selected ? 1 : 0.82);
+      button.setAlpha(selected ? 1 : GAMEPLAY_CONFIG.ui.unselectedButtonAlpha);
     });
   }
 
   private usePulse(): void {
     if (this.pulseCooldown > 0) return;
-    this.pulseCooldown = PULSE_COOLDOWN;
+    this.pulseCooldown = GAMEPLAY_CONFIG.pulse.cooldown;
     [...this.enemies].forEach((enemy) => {
       const distance = Phaser.Math.Distance.Between(this.playerX, this.playerY, enemy.body.x, enemy.body.y);
-      if (distance <= PULSE_RADIUS) this.damageEnemy(enemy, 42);
+      if (distance <= GAMEPLAY_CONFIG.pulse.radius) this.damageEnemy(enemy, GAMEPLAY_CONFIG.pulse.damage);
     });
     this.pulseEffect?.destroy();
-    this.pulseEffect = this.add.circle(this.playerX, this.playerY, PULSE_RADIUS, 0x59e4c2, 0.1)
+    this.pulseEffect = this.add.circle(
+      this.playerX,
+      this.playerY,
+      GAMEPLAY_CONFIG.pulse.radius,
+      0x59e4c2,
+      0.1,
+    )
       .setStrokeStyle(3, 0x86ffe0, 0.9).setDepth(6);
-    this.time.delayedCall(220, () => {
+    this.time.delayedCall(GAMEPLAY_CONFIG.pulse.effectDurationMs, () => {
       this.pulseEffect?.destroy();
       this.pulseEffect = null;
     });
@@ -658,20 +663,28 @@ export class DefenseScene extends Phaser.Scene {
       if (!enemy) continue;
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - seconds);
       this.moveEnemyAlongRoute(enemy, seconds);
-      if (enemy.segment >= ROUTE.length - 1) {
+      if (enemy.segment >= GAMEPLAY_CONFIG.route.length - 1) {
         enemy.body.destroy();
         this.enemies.splice(index, 1);
-        this.baseHealth = Math.max(0, this.baseHealth - (enemy.kind === 'boss' ? 30 : enemy.kind === 'brute' ? 18 : 10));
+        const breachDamage = enemy.kind === 'boss'
+          ? GAMEPLAY_CONFIG.base.bossBreachDamage
+          : enemy.kind === 'brute'
+            ? GAMEPLAY_CONFIG.base.bruteBreachDamage
+            : GAMEPLAY_CONFIG.base.breachDamage;
+        this.baseHealth = Math.max(0, this.baseHealth - breachDamage);
         this.statusText.setText('ПРОРЫВ К БАЗЕ!');
         if (this.baseHealth <= 0) this.endGame('База разрушена');
         continue;
       }
 
       const distanceToHero = Phaser.Math.Distance.Between(this.playerX, this.playerY, enemy.body.x, enemy.body.y);
-      if (distanceToHero < 28 && this.playerDamageCooldown <= 0) {
-        this.playerHealth = Math.max(0, this.playerHealth - (enemy.kind === 'boss' ? 22 : 12));
-        this.playerDamageCooldown = 0.75;
-        this.invulnerableTimer = 0.25;
+      if (distanceToHero < GAMEPLAY_CONFIG.player.collisionRange && this.playerDamageCooldown <= 0) {
+        const damage = enemy.kind === 'boss'
+          ? GAMEPLAY_CONFIG.player.bossDamage
+          : GAMEPLAY_CONFIG.player.damage;
+        this.playerHealth = Math.max(0, this.playerHealth - damage);
+        this.playerDamageCooldown = GAMEPLAY_CONFIG.player.damageCooldown;
+        this.invulnerableTimer = GAMEPLAY_CONFIG.player.invulnerabilityDuration;
         this.player.setFillStyle(0xff776f);
         this.statusText.setText('ГЕРОЙ ПОЛУЧИЛ УРОН!');
         if (this.playerHealth <= 0) this.endGame('Герой повержен');
@@ -682,8 +695,8 @@ export class DefenseScene extends Phaser.Scene {
   private moveEnemyAlongRoute(enemy: Enemy, seconds: number): void {
     const speed = enemy.slowTimer > 0 ? enemy.speed * enemy.slowFactor : enemy.speed;
     let distanceLeft = speed * seconds;
-    while (distanceLeft > 0 && enemy.segment < ROUTE.length - 1) {
-      const next = ROUTE[enemy.segment + 1];
+    while (distanceLeft > 0 && enemy.segment < GAMEPLAY_CONFIG.route.length - 1) {
+      const next = GAMEPLAY_CONFIG.route[enemy.segment + 1];
       if (!next) return;
       const dx = next.x - enemy.body.x;
       const dy = next.y - enemy.body.y;
@@ -704,28 +717,53 @@ export class DefenseScene extends Phaser.Scene {
     this.towers.forEach((tower) => {
       tower.cooldown = Math.max(0, tower.cooldown - seconds);
       if (tower.cooldown > 0) return;
-      const spec = TOWER_SPECS[tower.kind];
+      const spec = GAMEPLAY_CONFIG.tower[tower.kind];
       const levelGain = tower.level - 1;
-      const range = spec.range + levelGain * (tower.kind === 'rapid' ? 12 : 20);
+      const rangeGain = tower.kind === 'rapid'
+        ? GAMEPLAY_CONFIG.tower.rapidRangePerLevel
+        : GAMEPLAY_CONFIG.tower.otherRangePerLevel;
+      const range = spec.range + levelGain * rangeGain;
       const target = this.findClosestEnemy(tower.x, tower.y, range);
       if (!target) return;
 
       tower.barrel.setRotation(Phaser.Math.Angle.Between(tower.x, tower.y, target.body.x, target.body.y));
       tower.secondBarrel?.setRotation(tower.barrel.rotation);
-      const damage = spec.damage + levelGain * (tower.kind === 'cannon' ? 12 : tower.kind === 'rapid' ? 5 : 4);
+      const damagePerLevel = tower.kind === 'cannon'
+        ? GAMEPLAY_CONFIG.tower.cannonDamagePerLevel
+        : tower.kind === 'rapid'
+          ? GAMEPLAY_CONFIG.tower.rapidDamagePerLevel
+          : GAMEPLAY_CONFIG.tower.otherDamagePerLevel;
+      const damage = spec.damage + levelGain * damagePerLevel;
       const fireRate = tower.kind === 'rapid'
-        ? Math.max(0.2, spec.fireInterval * Math.pow(0.82, levelGain))
-        : Math.max(0.48, spec.fireInterval * (1 - levelGain * 0.1));
+        ? Math.max(
+          GAMEPLAY_CONFIG.tower.minimumRapidFireInterval,
+          spec.fireInterval * Math.pow(GAMEPLAY_CONFIG.tower.rapidFireIntervalMultiplier, levelGain),
+        )
+        : Math.max(
+          GAMEPLAY_CONFIG.tower.minimumOtherFireInterval,
+          spec.fireInterval * (1 - levelGain * GAMEPLAY_CONFIG.tower.otherFireIntervalReductionPerLevel),
+        );
       const effects = tower.kind === 'cannon'
-        ? { color: spec.projectileColor, splashRadius: 34 + tower.level * 9 }
+        ? {
+          color: spec.projectileColor,
+          splashRadius: GAMEPLAY_CONFIG.tower.cannonSplashBaseRadius
+            + tower.level * GAMEPLAY_CONFIG.tower.cannonSplashRadiusPerLevel,
+        }
         : tower.kind === 'cryo'
           ? {
             color: spec.projectileColor,
-            slowFactor: Math.max(0.34, 0.64 - levelGain * 0.12),
-            slowDuration: 1.3 + levelGain * 0.45,
+            slowFactor: Math.max(
+              GAMEPLAY_CONFIG.tower.cryoMinimumSlowFactor,
+              GAMEPLAY_CONFIG.tower.cryoBaseSlowFactor - levelGain * GAMEPLAY_CONFIG.tower.cryoSlowFactorPerLevel,
+            ),
+            slowDuration: GAMEPLAY_CONFIG.tower.cryoBaseSlowDuration
+              + levelGain * GAMEPLAY_CONFIG.tower.cryoSlowDurationPerLevel,
           }
           : { color: spec.projectileColor };
-      this.fireProjectile(tower.x, tower.y, target, damage, tower.kind === 'rapid' ? 560 : 390, 'tower', effects);
+      const projectileSpeed = tower.kind === 'rapid'
+        ? GAMEPLAY_CONFIG.tower.rapidProjectileSpeed
+        : GAMEPLAY_CONFIG.tower.projectileSpeed;
+      this.fireProjectile(tower.x, tower.y, target, damage, projectileSpeed, 'tower', effects);
       tower.cooldown = fireRate;
     });
   }
@@ -749,7 +787,10 @@ export class DefenseScene extends Phaser.Scene {
   ): void {
     const angle = angleOverride ?? Phaser.Math.Angle.Between(x, y, target.body.x, target.body.y);
     const color = options.color ?? (source === 'player' ? 0xffd078 : 0x83e8cb);
-    const body = this.add.circle(x, y, source === 'player' ? 5 : 4, color)
+    const radius = source === 'player'
+      ? GAMEPLAY_CONFIG.projectile.playerRadius
+      : GAMEPLAY_CONFIG.projectile.towerRadius;
+    const body = this.add.circle(x, y, radius, color)
       .setDepth(6);
     this.projectiles.push({
       body,
@@ -757,12 +798,12 @@ export class DefenseScene extends Phaser.Scene {
       vy: Math.sin(angle) * speed,
       damage,
       source,
-      lifetime: options.lifetime ?? 1.3,
-      pierce: options.pierce ?? 0,
+      lifetime: options.lifetime ?? GAMEPLAY_CONFIG.projectile.defaultLifetime,
+      pierce: options.pierce ?? GAMEPLAY_CONFIG.projectile.defaultPierce,
       hit: new Set<Enemy>(),
-      splashRadius: options.splashRadius ?? 0,
-      slowFactor: options.slowFactor ?? 1,
-      slowDuration: options.slowDuration ?? 0,
+      splashRadius: options.splashRadius ?? GAMEPLAY_CONFIG.projectile.defaultSplashRadius,
+      slowFactor: options.slowFactor ?? GAMEPLAY_CONFIG.projectile.defaultSlowFactor,
+      slowDuration: options.slowDuration ?? GAMEPLAY_CONFIG.projectile.defaultSlowDuration,
     });
   }
 
@@ -777,14 +818,20 @@ export class DefenseScene extends Phaser.Scene {
       for (const enemy of [...this.enemies]) {
         if (projectile.hit.has(enemy)) continue;
         const distance = Phaser.Math.Distance.Between(projectile.body.x, projectile.body.y, enemy.body.x, enemy.body.y);
-        if (distance <= 12 + (enemy.kind === 'boss' ? 20 : 10)) {
+        const collisionRadius = GAMEPLAY_CONFIG.enemy.collisionRadius
+          + (enemy.kind === 'boss'
+            ? GAMEPLAY_CONFIG.enemy.bossExtraCollisionRadius
+            : GAMEPLAY_CONFIG.enemy.regularExtraCollisionRadius);
+        if (distance <= collisionRadius) {
           projectile.hit.add(enemy);
           this.damageEnemy(enemy, projectile.damage);
           if (projectile.splashRadius > 0) {
             [...this.enemies].forEach((nearbyEnemy) => {
               if (nearbyEnemy === enemy) return;
               const splashDistance = Phaser.Math.Distance.Between(enemy.body.x, enemy.body.y, nearbyEnemy.body.x, nearbyEnemy.body.y);
-              if (splashDistance <= projectile.splashRadius) this.damageEnemy(nearbyEnemy, projectile.damage * 0.55);
+              if (splashDistance <= projectile.splashRadius) {
+                this.damageEnemy(nearbyEnemy, projectile.damage * GAMEPLAY_CONFIG.projectile.splashDamageMultiplier);
+              }
             });
           }
           if (projectile.slowDuration > 0 && this.enemies.includes(enemy)) {
@@ -799,8 +846,9 @@ export class DefenseScene extends Phaser.Scene {
           }
         }
       }
-      if (removeProjectile || projectile.lifetime <= 0 || projectile.body.x < 0 || projectile.body.x > GAME_WIDTH
-        || projectile.body.y < 112 || projectile.body.y > GAME_HEIGHT) {
+      if (removeProjectile || projectile.lifetime <= 0 || projectile.body.x < 0
+        || projectile.body.x > GAMEPLAY_CONFIG.scene.width || projectile.body.y < 112
+        || projectile.body.y > GAMEPLAY_CONFIG.scene.height) {
         projectile.body.destroy();
         this.projectiles.splice(index, 1);
       }
@@ -817,7 +865,7 @@ export class DefenseScene extends Phaser.Scene {
     this.kills += 1;
     this.coins += enemy.bounty;
     if (enemy.kind === 'boss') {
-      this.coins += 40;
+      this.coins += GAMEPLAY_CONFIG.economy.bossKillBonus;
       this.statusText.setText('БОСС УНИЧТОЖЕН! +40 МОНЕТ');
     }
   }
@@ -826,20 +874,27 @@ export class DefenseScene extends Phaser.Scene {
     this.wave += 1;
     this.waveDelay = 0;
     this.spawnQueue = [];
-    const count = Math.min(5 + this.wave * 2, 22);
+    const count = Math.min(
+      GAMEPLAY_CONFIG.wave.initialEnemyCount + this.wave * GAMEPLAY_CONFIG.wave.enemiesPerWave,
+      GAMEPLAY_CONFIG.wave.maxEnemies,
+    );
     for (let index = 0; index < count; index += 1) {
-      if (this.wave % 10 === 0 && index === count - 1) {
+      if (this.wave % GAMEPLAY_CONFIG.wave.bossEvery === 0 && index === count - 1) {
         this.spawnQueue.push('boss');
-      } else if (this.wave >= 4 && index % 5 === 4) {
+      } else if (this.wave >= GAMEPLAY_CONFIG.wave.bruteStartWave
+        && index % GAMEPLAY_CONFIG.wave.bruteEvery === GAMEPLAY_CONFIG.wave.bruteEvery - 1) {
         this.spawnQueue.push('brute');
-      } else if (this.wave >= 2 && index % 3 === 2) {
+      } else if (this.wave >= GAMEPLAY_CONFIG.wave.raiderStartWave
+        && index % GAMEPLAY_CONFIG.wave.raiderEvery === GAMEPLAY_CONFIG.wave.raiderEvery - 1) {
         this.spawnQueue.push('raider');
       } else {
         this.spawnQueue.push('scout');
       }
     }
-    this.spawnCooldown = 0.4;
-    this.statusText.setText(this.wave % 10 === 0 ? `ВОЛНА ${this.wave}: БОСС В КОЛОННЕ` : `НАСТУПАЕТ ВОЛНА ${this.wave}`);
+    this.spawnCooldown = GAMEPLAY_CONFIG.wave.initialSpawnDelay;
+    this.statusText.setText(this.wave % GAMEPLAY_CONFIG.wave.bossEvery === 0
+      ? `ВОЛНА ${this.wave}: БОСС В КОЛОННЕ`
+      : `НАСТУПАЕТ ВОЛНА ${this.wave}`);
   }
 
   private updateWave(seconds: number): void {
@@ -853,37 +908,37 @@ export class DefenseScene extends Phaser.Scene {
       return;
     }
     if (this.enemies.length > 0) return;
-    if (this.phase === 1 && this.wave === 2) {
+    if (this.phase === 1 && this.wave === GAMEPLAY_CONFIG.phaseTwo.startsAfterWave) {
       this.beginPhaseTwoTransition();
       return;
     }
     this.waveDelay += seconds;
-    if (this.waveDelay >= 3) this.launchWave();
+    if (this.waveDelay >= GAMEPLAY_CONFIG.wave.interWaveDelay) this.launchWave();
   }
 
   private beginPhaseTwoTransition(): void {
     this.phase = 2;
     this.enemies.forEach((enemy) => {
-      enemy.speed *= PHASE_TWO_ENEMY_SPEED_MULTIPLIER;
+      enemy.speed *= GAMEPLAY_CONFIG.phaseTwo.enemySpeedMultiplier;
     });
     this.spawnCooldown = 0;
     this.waveDelay = 0;
     this.mode = 'phase-transition';
-    this.phaseAnnouncementRemaining = PHASE_TWO_ANNOUNCEMENT_SECONDS;
+    this.phaseAnnouncementRemaining = GAMEPLAY_CONFIG.phaseTwo.announcementSeconds;
 
     this.modal?.destroy(true);
     this.modal = this.add.container(0, 0).setDepth(100);
     const overlay = this.add.rectangle(
-      GAME_WIDTH / 2,
-      GAME_HEIGHT / 2,
-      GAME_WIDTH,
-      GAME_HEIGHT,
+      GAMEPLAY_CONFIG.scene.width / 2,
+      GAMEPLAY_CONFIG.scene.height / 2,
+      GAMEPLAY_CONFIG.scene.width,
+      GAMEPLAY_CONFIG.scene.height,
       0x071015,
       0.94,
     ).setInteractive();
-    const accent = this.add.rectangle(GAME_WIDTH / 2, 282, 360, 3, 0x4ad8b8);
-    const title = this.add.text(GAME_WIDTH / 2, 320, 'ФАЗА 2', this.hudStyle(42, '#c3ffdf')).setOrigin(0.5);
-    const subtitle = this.add.text(GAME_WIDTH / 2, 372, 'ВРАГИ БЫСТРЕЕ · ВОЛНЫ ЧАЩЕ', this.hudStyle(16, '#f3cf79'))
+    const accent = this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 282, 360, 3, 0x4ad8b8);
+    const title = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 320, 'ФАЗА 2', this.hudStyle(42, '#c3ffdf')).setOrigin(0.5);
+    const subtitle = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 372, 'ВРАГИ БЫСТРЕЕ · ВОЛНЫ ЧАЩЕ', this.hudStyle(16, '#f3cf79'))
       .setOrigin(0.5);
     this.modal.add([overlay, accent, title, subtitle]);
   }
@@ -900,28 +955,29 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private enemySpawnInterval(): number {
-    const phaseMultiplier = this.phase === 2 ? PHASE_TWO_SPAWN_INTERVAL_MULTIPLIER : 1;
-    return Math.max(0.34, (1.1 - this.wave * 0.035) * phaseMultiplier);
+    const phaseMultiplier = this.phase === 2 ? GAMEPLAY_CONFIG.phaseTwo.spawnIntervalMultiplier : 1;
+    const baseInterval = GAMEPLAY_CONFIG.wave.baseSpawnInterval
+      - this.wave * GAMEPLAY_CONFIG.wave.spawnIntervalReductionPerWave;
+    return Math.max(GAMEPLAY_CONFIG.wave.minimumSpawnInterval, baseInterval * phaseMultiplier);
   }
 
   private spawnEnemy(kind: EnemyKind): void {
     const isBoss = kind === 'boss';
-    const stats = {
-      scout: { hp: 36, speed: 56, bounty: 5, radius: 11, color: 0xe5c36d },
-      raider: { hp: 26, speed: 96, bounty: 7, radius: 10, color: 0xe89562 },
-      brute: { hp: 100, speed: 35, bounty: 12, radius: 16, color: 0xc97067 },
-      boss: { hp: 460 + this.wave * 28, speed: 28, bounty: 35, radius: 23, color: 0xc17193 },
-    }[kind];
-    const scale = 1 + this.wave * 0.08;
-    const body = this.add.circle(ROUTE[0]?.x ?? 0, ROUTE[0]?.y ?? 188, stats.radius, stats.color)
+    const enemySpec = GAMEPLAY_CONFIG.enemy[kind];
+    const stats = kind === 'boss'
+      ? { ...enemySpec, hp: GAMEPLAY_CONFIG.wave.bossBaseHealth + this.wave * GAMEPLAY_CONFIG.wave.bossHealthPerWave }
+      : enemySpec;
+    const scale = 1 + this.wave * GAMEPLAY_CONFIG.wave.healthScalePerWave;
+    const start = GAMEPLAY_CONFIG.route[0];
+    const body = this.add.circle(start.x, start.y, stats.radius, stats.color)
       .setStrokeStyle(isBoss ? 4 : 2, 0xffe4c5).setDepth(5);
     this.enemies.push({
       body,
       kind,
       health: stats.hp * scale,
       maxHealth: stats.hp * scale,
-      speed: stats.speed * (1 + this.wave * 0.015)
-        * (this.phase === 2 ? PHASE_TWO_ENEMY_SPEED_MULTIPLIER : 1),
+      speed: stats.speed * (1 + this.wave * GAMEPLAY_CONFIG.wave.speedScalePerWave)
+        * (this.phase === 2 ? GAMEPLAY_CONFIG.phaseTwo.enemySpeedMultiplier : 1),
       bounty: stats.bounty,
       segment: 0,
       slowTimer: 0,
@@ -937,7 +993,7 @@ export class DefenseScene extends Phaser.Scene {
       this.selectTower(slot.tower);
       return;
     }
-    const spec = TOWER_SPECS[this.selectedTowerKind];
+    const spec = GAMEPLAY_CONFIG.tower[this.selectedTowerKind];
     if (this.coins < spec.cost) {
       this.statusText.setText(`НУЖНО ${spec.cost} МОНЕТ ДЛЯ ${spec.name.toUpperCase()}`);
       return;
@@ -957,7 +1013,11 @@ export class DefenseScene extends Phaser.Scene {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#f4f5dd',
     }).setOrigin(0.5).setDepth(6);
     const tower: Tower = {
-      x, y, kind: this.selectedTowerKind, level: 1, cooldown: 0.2,
+      x,
+      y,
+      kind: this.selectedTowerKind,
+      level: 1,
+      cooldown: GAMEPLAY_CONFIG.tower.initialCooldown,
       base, barrel, secondBarrel, core, typeLabel, rangeRing,
     };
     base.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
@@ -988,7 +1048,7 @@ export class DefenseScene extends Phaser.Scene {
   private upgradeSelectedTower(): void {
     const tower = this.selectedTower;
     if (this.mode !== 'playing' || !tower) return;
-    if (tower.level >= 3) {
+    if (tower.level >= GAMEPLAY_CONFIG.tower.upgradeMaximumLevel) {
       this.statusText.setText('ЭТА БАШНЯ УЖЕ МАКСИМАЛЬНОГО УРОВНЯ');
       return;
     }
@@ -999,18 +1059,30 @@ export class DefenseScene extends Phaser.Scene {
     }
     this.coins -= cost;
     tower.level += 1;
-    const spec = TOWER_SPECS[tower.kind];
-    tower.base.setFillStyle(tower.level === 3 ? Phaser.Display.Color.ValueToColor(spec.color).darken(18).color : spec.color);
-    tower.base.setRadius(18 + tower.level);
-    tower.core.setRadius(7 + tower.level);
+    const spec = GAMEPLAY_CONFIG.tower[tower.kind];
+    tower.base.setFillStyle(
+      tower.level === GAMEPLAY_CONFIG.tower.upgradeMaximumLevel
+        ? Phaser.Display.Color.ValueToColor(spec.color).darken(GAMEPLAY_CONFIG.tower.maximumLevelDarken).color
+        : spec.color,
+    );
+    tower.base.setRadius(
+      GAMEPLAY_CONFIG.tower.baseRadius + tower.level * GAMEPLAY_CONFIG.tower.baseRadiusPerLevel,
+    );
+    tower.core.setRadius(
+      GAMEPLAY_CONFIG.tower.coreRadius + tower.level * GAMEPLAY_CONFIG.tower.coreRadiusPerLevel,
+    );
     tower.typeLabel.setText(`${tower.kind === 'cannon' ? 'C' : tower.kind === 'rapid' ? 'R' : 'F'}${tower.level}`);
-    tower.rangeRing.setRadius(spec.range + (tower.level - 1) * (tower.kind === 'rapid' ? 12 : 20));
+    const rangeGain = tower.kind === 'rapid'
+      ? GAMEPLAY_CONFIG.tower.rapidRangePerLevel
+      : GAMEPLAY_CONFIG.tower.otherRangePerLevel;
+    tower.rangeRing.setRadius(spec.range + (tower.level - 1) * rangeGain);
     this.statusText.setText(`${spec.name.toUpperCase()} · УР. ${tower.level}: ${spec.upgradeDescription.toUpperCase()}`);
     this.refreshHud();
   }
 
   private towerUpgradeCost(tower: Tower): number {
-    return Math.round(TOWER_SPECS[tower.kind].cost * 0.65) + (tower.level - 1) * 20;
+    return Math.round(GAMEPLAY_CONFIG.tower[tower.kind].cost * GAMEPLAY_CONFIG.economy.upgradeBaseCostMultiplier)
+      + (tower.level - 1) * GAMEPLAY_CONFIG.economy.upgradeCostPerLevel;
   }
 
   private refreshUpgradeButton(): void {
@@ -1018,7 +1090,7 @@ export class DefenseScene extends Phaser.Scene {
       this.upgradeLabel.setText('ВЫБЕРИ БАШНЮ');
       return;
     }
-    if (this.selectedTower.level >= 3) {
+    if (this.selectedTower.level >= GAMEPLAY_CONFIG.tower.upgradeMaximumLevel) {
       this.upgradeLabel.setText('МАКС. УРОВЕНЬ');
       return;
     }
@@ -1030,11 +1102,38 @@ export class DefenseScene extends Phaser.Scene {
     if (this.mode === 'playing') {
       this.mode = 'paused';
       this.modal = this.add.container(0, 0).setDepth(100);
-      const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x071015, 0.8);
-      const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 430, 240, 0x142126).setStrokeStyle(2, 0x48d6be);
-      const title = this.add.text(GAME_WIDTH / 2, 258, 'ПАУЗА', this.hudStyle(28, '#c3ffdf')).setOrigin(0.5);
+      const overlay = this.add.rectangle(
+        GAMEPLAY_CONFIG.scene.width / 2,
+        GAMEPLAY_CONFIG.scene.height / 2,
+        GAMEPLAY_CONFIG.scene.width,
+        GAMEPLAY_CONFIG.scene.height,
+        0x071015,
+        0.8,
+      );
+      const panel = this.add.rectangle(
+        GAMEPLAY_CONFIG.scene.width / 2,
+        GAMEPLAY_CONFIG.scene.height / 2,
+        430,
+        240,
+        0x142126,
+      ).setStrokeStyle(2, 0x48d6be);
+      const title = this.add.text(
+        GAMEPLAY_CONFIG.scene.width / 2,
+        258,
+        'ПАУЗА',
+        this.hudStyle(28, '#c3ffdf'),
+      ).setOrigin(0.5);
       this.modal.add([overlay, panel, title]);
-      this.addButton(this.modal, GAME_WIDTH / 2, 330, 210, 46, 'ПРОДОЛЖИТЬ', () => this.resumeGame(), 0x208e76);
+      this.addButton(
+        this.modal,
+        GAMEPLAY_CONFIG.scene.width / 2,
+        330,
+        210,
+        46,
+        'ПРОДОЛЖИТЬ',
+        () => this.resumeGame(),
+        0x208e76,
+      );
     } else if (this.mode === 'paused') {
       this.resumeGame();
     }
@@ -1054,15 +1153,42 @@ export class DefenseScene extends Phaser.Scene {
     this.bestWave = Math.max(this.bestWave, this.wave);
     this.saveBestWave(this.bestWave);
     this.modal = this.add.container(0, 0).setDepth(100);
-    const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x071015, 0.86);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 590, 330, 0x142126).setStrokeStyle(2, 0xef886f);
-    const title = this.add.text(GAME_WIDTH / 2, 230, reason.toUpperCase(), this.hudStyle(27, '#ffac91')).setOrigin(0.5);
-    const stats = this.add.text(GAME_WIDTH / 2, 296,
+    const overlay = this.add.rectangle(
+      GAMEPLAY_CONFIG.scene.width / 2,
+      GAMEPLAY_CONFIG.scene.height / 2,
+      GAMEPLAY_CONFIG.scene.width,
+      GAMEPLAY_CONFIG.scene.height,
+      0x071015,
+      0.86,
+    );
+    const panel = this.add.rectangle(
+      GAMEPLAY_CONFIG.scene.width / 2,
+      GAMEPLAY_CONFIG.scene.height / 2,
+      590,
+      330,
+      0x142126,
+    ).setStrokeStyle(2, 0xef886f);
+    const title = this.add.text(
+      GAMEPLAY_CONFIG.scene.width / 2,
+      230,
+      reason.toUpperCase(),
+      this.hudStyle(27, '#ffac91'),
+    ).setOrigin(0.5);
+    const stats = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 296,
       `Волна: ${this.wave}   ·   Уничтожено врагов: ${this.kills}\nРекорд: ${this.bestWave}${newRecord ? '  ·  НОВЫЙ' : ''}`, {
         fontFamily: 'Trebuchet MS, sans-serif', fontSize: '16px', color: '#c4d8ce', align: 'center', lineSpacing: 8,
       }).setOrigin(0.5);
     this.modal.add([overlay, panel, title, stats]);
-    this.addButton(this.modal, GAME_WIDTH / 2, 400, 210, 48, 'ЗАНОВО', () => this.startGame(), 0x208e76);
+    this.addButton(
+      this.modal,
+      GAMEPLAY_CONFIG.scene.width / 2,
+      400,
+      210,
+      48,
+      'ЗАНОВО',
+      () => this.startGame(),
+      0x208e76,
+    );
   }
 
   private updateHud(): void {
