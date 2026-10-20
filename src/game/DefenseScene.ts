@@ -6,8 +6,11 @@ const PLAYER_SPEED = 230;
 const PLAYER_MAX_HEALTH = 100;
 const PULSE_RADIUS = 128;
 const PULSE_COOLDOWN = 8;
+const PHASE_TWO_ANNOUNCEMENT_SECONDS = 3;
+const PHASE_TWO_ENEMY_SPEED_MULTIPLIER = 1.3;
+const PHASE_TWO_SPAWN_INTERVAL_MULTIPLIER = 0.75;
 
-type Mode = 'menu' | 'playing' | 'paused' | 'gameover';
+type Mode = 'menu' | 'playing' | 'phase-transition' | 'paused' | 'gameover';
 type EnemyKind = 'scout' | 'raider' | 'brute' | 'boss';
 type TowerKind = 'cannon' | 'rapid' | 'cryo';
 type WeaponKind = 'pulse' | 'rail' | 'scatter';
@@ -167,6 +170,8 @@ export class DefenseScene extends Phaser.Scene {
   private spawnCooldown = 0;
   private waveDelay = 0;
   private invulnerableTimer = 0;
+  private phase: 1 | 2 = 1;
+  private phaseAnnouncementRemaining = 0;
   private pulseEffect: Phaser.GameObjects.Arc | null = null;
   private modal: Phaser.GameObjects.Container | null = null;
 
@@ -175,6 +180,7 @@ export class DefenseScene extends Phaser.Scene {
   private coinsText!: Phaser.GameObjects.Text;
   private playerText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
+  private phaseText!: Phaser.GameObjects.Text;
   private upgradeButton!: Phaser.GameObjects.Rectangle;
   private upgradeLabel!: Phaser.GameObjects.Text;
   private fireCooldownText!: Phaser.GameObjects.Text;
@@ -195,6 +201,11 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.mode === 'phase-transition') {
+      this.updatePhaseTransition(delta);
+      return;
+    }
+
     if (this.mode !== 'playing') {
       this.updatePausedKeys();
       return;
@@ -284,6 +295,7 @@ export class DefenseScene extends Phaser.Scene {
     this.statusText = this.add.text(22, 56, 'Построй башню на свободной площадке', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '11px', color: '#9eafa7',
     }).setDepth(12);
+    this.phaseText = this.add.text(22, 80, 'ФАЗА 2 ПОСЛЕ ВОЛНЫ 2', this.hudStyle(10, '#f3cf79')).setDepth(12);
 
     this.addTowerTypeButton('cannon', 390);
     this.addTowerTypeButton('rapid', 510);
@@ -444,6 +456,8 @@ export class DefenseScene extends Phaser.Scene {
     this.playerFireCooldown = 0;
     this.playerDamageCooldown = 0;
     this.pulseCooldown = 0;
+    this.phase = 1;
+    this.phaseAnnouncementRemaining = 0;
     this.selectedTowerKind = 'cannon';
     this.selectedWeapon = 'pulse';
     this.selectedTower = null;
@@ -834,13 +848,60 @@ export class DefenseScene extends Phaser.Scene {
       if (this.spawnCooldown <= 0) {
         const kind = this.spawnQueue.shift();
         if (kind) this.spawnEnemy(kind);
-        this.spawnCooldown = Math.max(0.34, 1.1 - this.wave * 0.035);
+        this.spawnCooldown = this.enemySpawnInterval();
       }
       return;
     }
     if (this.enemies.length > 0) return;
+    if (this.phase === 1 && this.wave === 2) {
+      this.beginPhaseTwoTransition();
+      return;
+    }
     this.waveDelay += seconds;
     if (this.waveDelay >= 3) this.launchWave();
+  }
+
+  private beginPhaseTwoTransition(): void {
+    this.phase = 2;
+    this.enemies.forEach((enemy) => {
+      enemy.speed *= PHASE_TWO_ENEMY_SPEED_MULTIPLIER;
+    });
+    this.spawnCooldown = 0;
+    this.waveDelay = 0;
+    this.mode = 'phase-transition';
+    this.phaseAnnouncementRemaining = PHASE_TWO_ANNOUNCEMENT_SECONDS;
+
+    this.modal?.destroy(true);
+    this.modal = this.add.container(0, 0).setDepth(100);
+    const overlay = this.add.rectangle(
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2,
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      0x071015,
+      0.94,
+    ).setInteractive();
+    const accent = this.add.rectangle(GAME_WIDTH / 2, 282, 360, 3, 0x4ad8b8);
+    const title = this.add.text(GAME_WIDTH / 2, 320, 'ФАЗА 2', this.hudStyle(42, '#c3ffdf')).setOrigin(0.5);
+    const subtitle = this.add.text(GAME_WIDTH / 2, 372, 'ВРАГИ БЫСТРЕЕ · ВОЛНЫ ЧАЩЕ', this.hudStyle(16, '#f3cf79'))
+      .setOrigin(0.5);
+    this.modal.add([overlay, accent, title, subtitle]);
+  }
+
+  private updatePhaseTransition(delta: number): void {
+    this.phaseAnnouncementRemaining -= Math.min(delta / 1000, 0.05);
+    if (this.phaseAnnouncementRemaining > 0) return;
+
+    this.modal?.destroy(true);
+    this.modal = null;
+    this.mode = 'playing';
+    this.statusText.setText('ФАЗА 2: ВРАГИ БЫСТРЕЕ, ВОЛНЫ ЧАЩЕ');
+    this.launchWave();
+  }
+
+  private enemySpawnInterval(): number {
+    const phaseMultiplier = this.phase === 2 ? PHASE_TWO_SPAWN_INTERVAL_MULTIPLIER : 1;
+    return Math.max(0.34, (1.1 - this.wave * 0.035) * phaseMultiplier);
   }
 
   private spawnEnemy(kind: EnemyKind): void {
@@ -859,7 +920,8 @@ export class DefenseScene extends Phaser.Scene {
       kind,
       health: stats.hp * scale,
       maxHealth: stats.hp * scale,
-      speed: stats.speed * (1 + this.wave * 0.015),
+      speed: stats.speed * (1 + this.wave * 0.015)
+        * (this.phase === 2 ? PHASE_TWO_ENEMY_SPEED_MULTIPLIER : 1),
       bounty: stats.bounty,
       segment: 0,
       slowTimer: 0,
@@ -1008,6 +1070,9 @@ export class DefenseScene extends Phaser.Scene {
     this.baseText.setText(`БАЗА ${this.baseHealth}`);
     this.coinsText.setText(`МОНЕТЫ ${this.coins}`);
     this.playerText.setText(`ГЕРОЙ ${this.playerHealth}`);
+    this.phaseText.setText(this.phase === 2
+      ? 'ФАЗА 2 · ВРАГИ БЫСТРЕЕ · ВОЛНЫ ЧАЩЕ'
+      : 'ФАЗА 2 ПОСЛЕ ВОЛНЫ 2');
     const weaponNames: Record<WeaponKind, string> = {
       pulse: 'КАРАБИН', rail: 'РЕЛЬСА', scatter: 'ДРОБОВИК',
     };
