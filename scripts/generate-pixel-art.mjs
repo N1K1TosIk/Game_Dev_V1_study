@@ -145,6 +145,13 @@ const sprites = {
   'tile-slot.png': slot,
   'hero.png': sized(32, 32, hero),
   'enemy-scout.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8)),
+  'enemy-flyer.png': sized(32, 32, (art) => {
+    enemy(art, 0x7eb6d8, 0xb7e4f6, 0xf4fbff);
+    art.rect(2, 12, 6, 3, 0xd8f4ff);
+    art.rect(24, 12, 6, 3, 0xd8f4ff);
+    art.rect(4, 10, 3, 2, 0x9fd0ea);
+    art.rect(25, 10, 3, 2, 0x9fd0ea);
+  }),
   'enemy-raider.png': sized(32, 32, (art) => {
     enemy(art, 0xe89562, 0xffb27a, 0xffe0c8);
     art.rect(6, 14, 4, 2, 0xffd0a4);

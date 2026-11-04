@@ -1,4 +1,4 @@
-export type EnemyKind = 'scout' | 'raider' | 'brute' | 'boss';
+export type EnemyKind = 'scout' | 'raider' | 'brute' | 'boss' | 'flyer';
 export type TowerKind = 'cannon' | 'rapid' | 'cryo';
 export type WeaponKind = 'pulse' | 'rail' | 'scatter';
 
@@ -62,6 +62,8 @@ export const GAMEPLAY_CONFIG = {
     invulnerabilityDuration: 0.25,
   },
   base: {
+    x: 914,
+    y: 470,
     maxHealth: 100,
     breachDamage: 10,
     bruteBreachDamage: 18,
@@ -95,6 +97,11 @@ export const GAMEPLAY_CONFIG = {
     bruteEvery: 5,
     raiderStartWave: 2,
     raiderEvery: 3,
+    flyingStartWave: 3,
+    flyingEvery: 4,
+    flyingSpawnX: 0,
+    flyingSpawnPadding: 28,
+    flyingArrivalRadius: 36,
     initialSpawnDelay: 0.4,
     baseSpawnInterval: 1.1,
     spawnIntervalReductionPerWave: 0.035,
@@ -110,6 +117,7 @@ export const GAMEPLAY_CONFIG = {
     raider: { hp: 26, speed: 96, bounty: 7, radius: 10, color: 0xe89562 },
     brute: { hp: 100, speed: 35, bounty: 12, radius: 16, color: 0xc97067 },
     boss: { hp: 460, speed: 28, bounty: 35, radius: 23, color: 0xc17193 },
+    flyer: { hp: 48, speed: 74, bounty: 8, radius: 11, color: 0x7eb6d8 },
     collisionRadius: 12,
     bossExtraCollisionRadius: 20,
     regularExtraCollisionRadius: 10,

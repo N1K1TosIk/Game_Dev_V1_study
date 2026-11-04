@@ -143,7 +143,7 @@ export class DefenseScene extends Phaser.Scene {
     for (const key of [
       'tile-grass', 'tile-path', 'tile-slot',
       'hero', 'base',
-      'enemy-scout', 'enemy-raider', 'enemy-brute', 'enemy-boss',
+      'enemy-scout', 'enemy-raider', 'enemy-brute', 'enemy-boss', 'enemy-flyer',
       'tower-cannon', 'tower-rapid', 'tower-cryo',
     ]) {
       this.load.image(key, `assets/${key}.png`);
@@ -210,8 +210,8 @@ export class DefenseScene extends Phaser.Scene {
       return { x, y, marker, label, tower: null };
     });
 
-    this.add.image(914, 470, 'base').setDepth(4);
-    this.add.text(914, 512, 'БАЗА', {
+    this.add.image(GAMEPLAY_CONFIG.base.x, GAMEPLAY_CONFIG.base.y, 'base').setDepth(4);
+    this.add.text(GAMEPLAY_CONFIG.base.x, GAMEPLAY_CONFIG.base.y + 42, 'БАЗА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#c6e9d4',
     }).setOrigin(0.5).setDepth(5);
   }
@@ -742,7 +742,7 @@ export class DefenseScene extends Phaser.Scene {
       const enemy = this.enemies[index];
       if (!enemy) continue;
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - seconds);
-      this.moveEnemyAlongRoute(enemy, seconds);
+      this.moveEnemy(enemy, seconds);
       this.syncEnemyHealthBar(enemy);
       if (enemy.segment >= GAMEPLAY_CONFIG.route.length - 1) {
         enemy.body.destroy();
@@ -774,8 +774,35 @@ export class DefenseScene extends Phaser.Scene {
     }
   }
 
+  private moveEnemy(enemy: Enemy, seconds: number): void {
+    if (enemy.kind === 'flyer') {
+      this.moveFlyingEnemy(enemy, seconds);
+      return;
+    }
+    this.moveEnemyAlongRoute(enemy, seconds);
+  }
+
+  private enemyMoveSpeed(enemy: Enemy): number {
+    return enemy.slowTimer > 0 ? enemy.speed * enemy.slowFactor : enemy.speed;
+  }
+
+  private moveFlyingEnemy(enemy: Enemy, seconds: number): void {
+    const goalX = GAMEPLAY_CONFIG.base.x;
+    const goalY = GAMEPLAY_CONFIG.base.y;
+    const dx = goalX - enemy.body.x;
+    const dy = goalY - enemy.body.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= GAMEPLAY_CONFIG.wave.flyingArrivalRadius) {
+      enemy.segment = GAMEPLAY_CONFIG.route.length - 1;
+      return;
+    }
+    const step = Math.min(this.enemyMoveSpeed(enemy) * seconds, distance);
+    enemy.body.x += (dx / distance) * step;
+    enemy.body.y += (dy / distance) * step;
+  }
+
   private moveEnemyAlongRoute(enemy: Enemy, seconds: number): void {
-    const speed = enemy.slowTimer > 0 ? enemy.speed * enemy.slowFactor : enemy.speed;
+    const speed = this.enemyMoveSpeed(enemy);
     let distanceLeft = speed * seconds;
     while (distanceLeft > 0 && enemy.segment < GAMEPLAY_CONFIG.route.length - 1) {
       const next = GAMEPLAY_CONFIG.route[enemy.segment + 1];
@@ -979,17 +1006,7 @@ export class DefenseScene extends Phaser.Scene {
       GAMEPLAY_CONFIG.wave.maxEnemies,
     );
     for (let index = 0; index < count; index += 1) {
-      if (this.wave % GAMEPLAY_CONFIG.wave.bossEvery === 0 && index === count - 1) {
-        this.spawnQueue.push('boss');
-      } else if (this.wave >= GAMEPLAY_CONFIG.wave.bruteStartWave
-        && index % GAMEPLAY_CONFIG.wave.bruteEvery === GAMEPLAY_CONFIG.wave.bruteEvery - 1) {
-        this.spawnQueue.push('brute');
-      } else if (this.wave >= GAMEPLAY_CONFIG.wave.raiderStartWave
-        && index % GAMEPLAY_CONFIG.wave.raiderEvery === GAMEPLAY_CONFIG.wave.raiderEvery - 1) {
-        this.spawnQueue.push('raider');
-      } else {
-        this.spawnQueue.push('scout');
-      }
+      this.spawnQueue.push(this.enemyKindForSpawn(index, count));
     }
     this.spawnCooldown = GAMEPLAY_CONFIG.wave.initialSpawnDelay;
     this.statusText.setText(this.wave % GAMEPLAY_CONFIG.wave.bossEvery === 0
@@ -1061,6 +1078,26 @@ export class DefenseScene extends Phaser.Scene {
     return Math.max(GAMEPLAY_CONFIG.wave.minimumSpawnInterval, baseInterval * phaseMultiplier);
   }
 
+  private enemyKindForSpawn(index: number, count: number): EnemyKind {
+    const wave = GAMEPLAY_CONFIG.wave;
+    if (this.wave % wave.bossEvery === 0 && index === count - 1) return 'boss';
+    if (this.wave >= wave.bruteStartWave && index % wave.bruteEvery === wave.bruteEvery - 1) return 'brute';
+    if (this.wave >= wave.raiderStartWave && index % wave.raiderEvery === wave.raiderEvery - 1) return 'raider';
+    if (this.wave >= wave.flyingStartWave && index % wave.flyingEvery === wave.flyingEvery - 1) return 'flyer';
+    return 'scout';
+  }
+
+  private flyingSpawnPoint(): Point {
+    const minY = GAMEPLAY_CONFIG.hud.topHeight + GAMEPLAY_CONFIG.wave.flyingSpawnPadding;
+    const maxY = GAMEPLAY_CONFIG.scene.height
+      - GAMEPLAY_CONFIG.hud.dockHeight
+      - GAMEPLAY_CONFIG.wave.flyingSpawnPadding;
+    return {
+      x: GAMEPLAY_CONFIG.wave.flyingSpawnX,
+      y: Phaser.Math.Between(minY, maxY),
+    };
+  }
+
   private spawnEnemy(kind: EnemyKind): void {
     const isBoss = kind === 'boss';
     const enemySpec = GAMEPLAY_CONFIG.enemy[kind];
@@ -1068,7 +1105,7 @@ export class DefenseScene extends Phaser.Scene {
       ? { ...enemySpec, hp: GAMEPLAY_CONFIG.wave.bossBaseHealth + this.wave * GAMEPLAY_CONFIG.wave.bossHealthPerWave }
       : enemySpec;
     const scale = 1 + this.wave * GAMEPLAY_CONFIG.wave.healthScalePerWave;
-    const start = GAMEPLAY_CONFIG.route[0];
+    const start = kind === 'flyer' ? this.flyingSpawnPoint() : GAMEPLAY_CONFIG.route[0];
     const body = this.add.image(start.x, start.y, `enemy-${kind}`).setDepth(5);
     if (isBoss) body.setScale(1.05);
     const healthBar = this.add.graphics().setDepth(6);
