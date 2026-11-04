@@ -206,21 +206,6 @@ export class DefenseScene extends Phaser.Scene {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#d5e7c8',
     }).setDepth(2);
 
-    this.slots = GAMEPLAY_CONFIG.buildSlots.map(({ x, y }) => {
-      const marker = this.add.image(x, y, 'tile-slot')
-        .setDisplaySize(40, 40)
-        .setDepth(2)
-        .setInteractive({ useHandCursor: true });
-      marker.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
-        event.stopPropagation();
-        this.selectOrBuildTower(x, y);
-      });
-      const label = this.add.text(x, y, '+', {
-        fontFamily: 'Trebuchet MS, sans-serif', fontSize: '21px', fontStyle: 'bold', color: '#cde8c1',
-      }).setOrigin(0.5).setDepth(1);
-      return { x, y, marker, label, tower: null };
-    });
-
     this.baseSprite = this.add.image(this.basePoint.x, this.basePoint.y, 'base').setDepth(4);
     this.baseLabel = this.add.text(this.basePoint.x, this.basePoint.y + GAMEPLAY_CONFIG.routeGen.baseLabelOffset, 'БАЗА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#c6e9d4',
@@ -257,6 +242,30 @@ export class DefenseScene extends Phaser.Scene {
     this.stampPath();
     this.baseSprite.setPosition(this.basePoint.x, this.basePoint.y);
     this.baseLabel.setPosition(this.basePoint.x, this.basePoint.y + GAMEPLAY_CONFIG.routeGen.baseLabelOffset);
+    this.rebuildSlots(layout.slots);
+  }
+
+  private rebuildSlots(points: Point[]): void {
+    this.slots.forEach((slot) => {
+      slot.marker.destroy();
+      slot.label.destroy();
+    });
+    this.slots = points.map((point) => this.createSlot(point.x, point.y));
+  }
+
+  private createSlot(x: number, y: number): BuildSlot {
+    const marker = this.add.image(x, y, 'tile-slot')
+      .setDisplaySize(40, 40)
+      .setDepth(2)
+      .setInteractive({ useHandCursor: true });
+    marker.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
+      event.stopPropagation();
+      this.selectOrBuildTower(x, y);
+    });
+    const label = this.add.text(x, y, '+', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '21px', fontStyle: 'bold', color: '#cde8c1',
+    }).setOrigin(0.5).setDepth(3);
+    return { x, y, marker, label, tower: null };
   }
 
   private stampPath(): void {

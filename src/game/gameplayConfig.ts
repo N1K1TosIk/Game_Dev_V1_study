@@ -207,16 +207,6 @@ export const GAMEPLAY_CONFIG = {
     endPastBase: 36,
     minLeg: 96,
   },
-  buildSlots: [
-    { x: 100, y: 320 },
-    { x: 300, y: 300 },
-    { x: 300, y: 540 },
-    { x: 360, y: 320 },
-    { x: 560, y: 120 },
-    { x: 580, y: 320 },
-    { x: 820, y: 320 },
-    { x: 840, y: 500 },
-  ] satisfies Point[],
   hud: {
     topHeight: 40,
     dockHeight: 78,
