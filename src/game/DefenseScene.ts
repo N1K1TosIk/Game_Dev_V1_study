@@ -12,7 +12,8 @@ import {
 type Mode = 'menu' | 'playing' | 'phase-transition' | 'paused' | 'gameover';
 
 interface Enemy {
-  body: Phaser.GameObjects.Arc;
+  body: Phaser.GameObjects.Image;
+  healthBar: Phaser.GameObjects.Graphics;
   kind: EnemyKind;
   health: number;
   maxHealth: number;
@@ -28,19 +29,17 @@ interface Tower {
   y: number;
   kind: TowerKind;
   level: number;
+  invested: number;
   cooldown: number;
-  base: Phaser.GameObjects.Arc;
-  barrel: Phaser.GameObjects.Rectangle;
-  secondBarrel: Phaser.GameObjects.Rectangle | null;
-  core: Phaser.GameObjects.Arc;
-  typeLabel: Phaser.GameObjects.Text;
+  sprite: Phaser.GameObjects.Image;
+  levelLabel: Phaser.GameObjects.Text;
   rangeRing: Phaser.GameObjects.Arc;
 }
 
 interface BuildSlot {
   x: number;
   y: number;
-  marker: Phaser.GameObjects.Arc;
+  marker: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   tower: Tower | null;
 }
@@ -57,6 +56,9 @@ interface Projectile {
   splashRadius: number;
   slowFactor: number;
   slowDuration: number;
+  speed: number;
+  turnRate: number;
+  steerTarget: Enemy | null;
 }
 
 interface Keys {
@@ -77,13 +79,13 @@ interface Keys {
   one: Phaser.Input.Keyboard.Key;
   two: Phaser.Input.Keyboard.Key;
   three: Phaser.Input.Keyboard.Key;
+  b: Phaser.Input.Keyboard.Key;
 }
 
 export class DefenseScene extends Phaser.Scene {
   private mode: Mode = 'menu';
   private keys!: Keys;
-  private player!: Phaser.GameObjects.Arc;
-  private playerBarrel!: Phaser.GameObjects.Rectangle;
+  private player!: Phaser.GameObjects.Image;
   private playerHealth: number = GAMEPLAY_CONFIG.player.maxHealth;
   private playerX: number = GAMEPLAY_CONFIG.player.start.x;
   private playerY: number = GAMEPLAY_CONFIG.player.start.y;
@@ -103,6 +105,9 @@ export class DefenseScene extends Phaser.Scene {
   private selectedTowerKind: TowerKind = 'cannon';
   private selectedWeapon: WeaponKind = 'pulse';
   private towerTypeButtons: Phaser.GameObjects.Rectangle[] = [];
+  private buildSheet!: Phaser.GameObjects.Container;
+  private buildButton!: Phaser.GameObjects.Rectangle;
+  private buildSheetOpen = false;
   private weaponButtons: Phaser.GameObjects.Rectangle[] = [];
 
   private wave = 0;
@@ -125,12 +130,27 @@ export class DefenseScene extends Phaser.Scene {
   private phaseText!: Phaser.GameObjects.Text;
   private upgradeButton!: Phaser.GameObjects.Rectangle;
   private upgradeLabel!: Phaser.GameObjects.Text;
+  private sellButton!: Phaser.GameObjects.Rectangle;
+  private sellLabel!: Phaser.GameObjects.Text;
   private fireCooldownText!: Phaser.GameObjects.Text;
-  private weaponNameText!: Phaser.GameObjects.Text;
+  private fireKeyButton!: Phaser.GameObjects.Rectangle;
+  private pulseKeyButton!: Phaser.GameObjects.Rectangle;
+  private pulseKeyLabel!: Phaser.GameObjects.Text;
   private bestWave = 0;
 
   constructor() {
     super('DefenseScene');
+  }
+
+  preload(): void {
+    for (const key of [
+      'tile-grass', 'tile-path', 'tile-slot',
+      'hero', 'base',
+      'enemy-scout', 'enemy-raider', 'enemy-brute', 'enemy-boss', 'enemy-flyer',
+      'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing',
+    ]) {
+      this.load.image(key, `assets/${key}.png`);
+    }
   }
 
   create(): void {
@@ -168,52 +188,20 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private drawMap(): void {
-    this.cameras.main.setBackgroundColor('#0c1419');
-    this.add.rectangle(
-      GAMEPLAY_CONFIG.scene.width / 2,
-      GAMEPLAY_CONFIG.scene.height / 2,
-      GAMEPLAY_CONFIG.scene.width,
-      GAMEPLAY_CONFIG.scene.height,
-      0x101a20,
-    );
+    this.cameras.main.setBackgroundColor('#1d5a38');
+    const width = GAMEPLAY_CONFIG.scene.width;
+    const height = GAMEPLAY_CONFIG.scene.height;
+    this.add.tileSprite(width / 2, height / 2, width, height, 'tile-grass').setDepth(0);
+    this.stampPath();
 
-    const grid = this.add.graphics();
-    grid.lineStyle(1, 0x1d2c30, 0.7);
-    for (let x = 20; x < GAMEPLAY_CONFIG.scene.width; x += 40) {
-      grid.lineBetween(x, 104, x, GAMEPLAY_CONFIG.scene.height);
-    }
-    for (let y = 120; y < GAMEPLAY_CONFIG.scene.height; y += 40) {
-      grid.lineBetween(0, y, GAMEPLAY_CONFIG.scene.width, y);
-    }
-
-    const road = this.add.graphics();
-    road.lineStyle(52, 0x3a4544, 1);
-    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
-      const start = GAMEPLAY_CONFIG.route[index];
-      const end = GAMEPLAY_CONFIG.route[index + 1];
-      if (start && end) road.lineBetween(start.x, start.y, end.x, end.y);
-    }
-    road.lineStyle(2, 0x9eaa8e, 0.65);
-    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
-      const start = GAMEPLAY_CONFIG.route[index];
-      const end = GAMEPLAY_CONFIG.route[index + 1];
-      if (start && end) road.lineBetween(start.x, start.y, end.x, end.y);
-    }
-
-    this.add.rectangle(
-      GAMEPLAY_CONFIG.scene.width / 2,
-      102,
-      GAMEPLAY_CONFIG.scene.width,
-      4,
-      0x405450,
-    ).setDepth(4);
-    this.add.text(22, 113, 'МАРШРУТ ВРАГА', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#879890',
-    });
+    this.add.text(22, GAMEPLAY_CONFIG.hud.topHeight + 14, 'МАРШРУТ ВРАГА', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#d5e7c8',
+    }).setDepth(2);
 
     this.slots = GAMEPLAY_CONFIG.buildSlots.map(({ x, y }) => {
-      const marker = this.add.circle(x, y, 20, 0x1b292b, 0.96)
-        .setStrokeStyle(2, 0x8da491)
+      const marker = this.add.image(x, y, 'tile-slot')
+        .setDisplaySize(40, 40)
+        .setDepth(2)
         .setInteractive({ useHandCursor: true });
       marker.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
         event.stopPropagation();
@@ -225,74 +213,155 @@ export class DefenseScene extends Phaser.Scene {
       return { x, y, marker, label, tower: null };
     });
 
-    const base = this.add.rectangle(914, 470, 44, 58, 0x347e73).setStrokeStyle(3, 0xb6f3cd).setDepth(4);
-    this.add.rectangle(914, 470, 17, 22, 0xbaffdc).setDepth(5);
-    this.add.text(914, 510, 'БАЗА', {
+    this.add.image(GAMEPLAY_CONFIG.base.x, GAMEPLAY_CONFIG.base.y, 'base').setDepth(4);
+    this.add.text(GAMEPLAY_CONFIG.base.x, GAMEPLAY_CONFIG.base.y + 42, 'БАЗА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#c6e9d4',
     }).setOrigin(0.5).setDepth(5);
-    base.setDepth(3);
+  }
+
+  private stampPath(): void {
+    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
+      const start = GAMEPLAY_CONFIG.route[index];
+      const end = GAMEPLAY_CONFIG.route[index + 1];
+      if (!start || !end) continue;
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const steps = Math.ceil(length / 16);
+      const nx = -dy / length;
+      const ny = dx / length;
+      for (let step = 0; step <= steps; step += 1) {
+        const t = step / steps;
+        const x = start.x + dx * t;
+        const y = start.y + dy * t;
+        for (const offset of [-18, 0, 18]) {
+          this.add.image(x + nx * offset, y + ny * offset, 'tile-path').setDepth(1);
+        }
+      }
+    }
   }
 
   private createHud(): void {
-    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 51, GAMEPLAY_CONFIG.scene.width, 102, 0x111d21).setDepth(10);
-    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 102, GAMEPLAY_CONFIG.scene.width, 2, 0x405450).setDepth(11);
+    const width = GAMEPLAY_CONFIG.scene.width;
+    const height = GAMEPLAY_CONFIG.scene.height;
+    const top = GAMEPLAY_CONFIG.hud.topHeight;
+    const dock = GAMEPLAY_CONFIG.hud.dockHeight;
+    const dockTop = height - dock;
+    const actionY = dockTop + 48;
 
-    this.add.text(22, 14, 'LAST LINE', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '18px', fontStyle: 'bold', color: '#d8f4dd',
+    this.add.rectangle(width / 2, top / 2, width, top, 0x111d21).setDepth(10);
+    this.add.rectangle(width / 2, top, width, 2, 0x405450).setDepth(11);
+    this.add.text(16, 9, 'LAST LINE', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '16px', fontStyle: 'bold', color: '#d8f4dd',
     }).setDepth(12);
-    this.waveText = this.add.text(205, 17, 'ВОЛНА 0', this.hudStyle(13, '#e5e8d2')).setDepth(12);
-    this.coinsText = this.add.text(326, 17, 'МОНЕТЫ 110', this.hudStyle(13, '#f3cf79')).setDepth(12);
-    this.baseText = this.add.text(490, 17, 'БАЗА 100', this.hudStyle(13, '#91e0b4')).setDepth(12);
-    this.playerText = this.add.text(630, 17, 'ГЕРОЙ 100', this.hudStyle(13, '#ff9f8e')).setDepth(12);
+    this.waveText = this.add.text(132, 12, 'ВОЛНА 0', this.hudStyle(12, '#e5e8d2')).setDepth(12);
+    this.coinsText = this.add.text(250, 12, 'МОНЕТЫ 110', this.hudStyle(12, '#f3cf79')).setDepth(12);
+    this.baseText = this.add.text(400, 12, 'БАЗА 100', this.hudStyle(12, '#91e0b4')).setDepth(12);
+    this.playerText = this.add.text(520, 12, 'ГЕРОЙ 100', this.hudStyle(12, '#ff9f8e')).setDepth(12);
+    this.phaseText = this.add.text(650, 13, 'ФАЗА 1', this.hudStyle(10, '#f3cf79')).setDepth(12);
 
-    const pause = this.add.rectangle(902, 28, 86, 34, 0x293b3b)
+    const pause = this.add.rectangle(902, top / 2, 78, 26, 0x293b3b)
       .setStrokeStyle(1, 0x759182).setInteractive({ useHandCursor: true }).setDepth(12);
     pause.on('pointerdown', () => this.togglePause());
-    this.add.text(902, 28, 'ПАУЗА', this.hudStyle(10, '#e5efe5')).setOrigin(0.5).setDepth(13);
+    this.add.text(902, top / 2, 'ПАУЗА', this.hudStyle(10, '#e5efe5')).setOrigin(0.5).setDepth(13);
 
-    this.statusText = this.add.text(22, 56, 'Построй башню на свободной площадке', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '11px', color: '#9eafa7',
+    this.add.rectangle(width / 2, dockTop + dock / 2, width, dock, 0x111d21).setDepth(10);
+    this.add.rectangle(width / 2, dockTop, width, 2, 0x405450).setDepth(11);
+    this.statusText = this.add.text(16, dockTop + 8, 'Нажми B, чтобы открыть строительство', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#c5d6cc',
+      wordWrap: { width: 600 },
     }).setDepth(12);
-    this.phaseText = this.add.text(22, 80, 'ФАЗА 2 ПОСЛЕ ВОЛНЫ 2', this.hudStyle(10, '#f3cf79')).setDepth(12);
 
-    this.addTowerTypeButton('cannon', 390);
-    this.addTowerTypeButton('rapid', 510);
-    this.addTowerTypeButton('cryo', 630);
+    this.addWeaponButton('pulse', 168, actionY);
+    this.addWeaponButton('rail', 292, actionY);
+    this.addWeaponButton('scatter', 416, actionY);
+    this.buildButton = this.add.rectangle(560, actionY, 124, 32, 0x263b38)
+      .setStrokeStyle(1, 0x8fbf9a).setInteractive({ useHandCursor: true }).setDepth(12);
+    this.buildButton.on('pointerdown', () => this.toggleBuildSheet());
+    this.add.text(560, actionY, 'B СТРОИТЬ', this.hudStyle(10, '#d9e8dc')).setOrigin(0.5).setDepth(13);
+    this.fireKeyButton = this.add.rectangle(700, dockTop + 18, 92, 24, 0x263b38)
+      .setStrokeStyle(1, 0xf1b57d).setDepth(12);
+    this.fireCooldownText = this.add.text(700, dockTop + 18, 'SPACE', this.hudStyle(10, '#fff0d9')).setOrigin(0.5).setDepth(13);
+    this.pulseKeyButton = this.add.rectangle(804, dockTop + 18, 64, 24, 0x263b38)
+      .setStrokeStyle(1, 0x7de0ca).setDepth(12);
+    this.pulseKeyLabel = this.add.text(804, dockTop + 18, 'Q', this.hudStyle(12, '#d5fff3')).setOrigin(0.5).setDepth(13);
+    this.createBuildSheet(width, height);
 
-    this.upgradeButton = this.add.rectangle(842, 71, 186, 32, 0x263b38)
+    this.upgradeButton = this.add.rectangle(760, actionY, 116, 32, 0x263b38)
       .setStrokeStyle(1, 0x637d70).setInteractive({ useHandCursor: true }).setDepth(12);
     this.upgradeButton.on('pointerdown', () => this.upgradeSelectedTower());
-    this.upgradeLabel = this.add.text(842, 71, 'ВЫБЕРИ БАШНЮ', this.hudStyle(9, '#a6b8ae'))
+    this.upgradeLabel = this.add.text(760, actionY, 'УЛУЧШИТЬ', this.hudStyle(9, '#a6b8ae'))
       .setOrigin(0.5).setDepth(13);
-
-    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 613, GAMEPLAY_CONFIG.scene.width, 54, 0x111d21).setDepth(10);
-    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 586, GAMEPLAY_CONFIG.scene.width, 2, 0x405450).setDepth(11);
-    this.weaponNameText = this.add.text(22, 603, 'ОРУЖИЕ', this.hudStyle(10, '#9eafa7')).setDepth(12);
-    this.addWeaponButton('pulse', 178);
-    this.addWeaponButton('rail', 326);
-    this.addWeaponButton('scatter', 474);
-    this.fireCooldownText = this.add.text(614, 604, 'SPACE: ОГОНЬ  ·  Q: ИМПУЛЬС', this.hudStyle(10, '#b6c9bc')).setDepth(12);
+    this.sellButton = this.add.rectangle(888, actionY, 116, 32, 0x3a2a28)
+      .setStrokeStyle(1, 0xc98474).setInteractive({ useHandCursor: true }).setDepth(12);
+    this.sellButton.on('pointerdown', () => this.sellSelectedTower());
+    this.sellLabel = this.add.text(888, actionY, 'ПРОДАТЬ', this.hudStyle(9, '#f0c2b6'))
+      .setOrigin(0.5).setDepth(13);
+    this.refreshHotkeyHighlights();
   }
 
-  private addTowerTypeButton(kind: TowerKind, x: number): void {
+  private createBuildSheet(width: number, height: number): void {
+    const sheetHeight = GAMEPLAY_CONFIG.hud.buildSheetHeight;
+    this.buildSheet = this.add.container(0, height).setDepth(15);
+    const panel = this.add.rectangle(width / 2, sheetHeight / 2, width, sheetHeight, 0x182428)
+      .setStrokeStyle(1, 0x405450)
+      .setInteractive();
+    const title = this.add.text(24, sheetHeight / 2, 'СТРОИТЕЛЬСТВО', this.hudStyle(11, '#d5e7c8')).setOrigin(0, 0.5);
+    this.buildSheet.add([panel, title]);
+    this.towerKinds().forEach((kind, index) => {
+      this.addTowerTypeButton(kind, 250 + index * 155, sheetHeight / 2);
+    });
+  }
+
+  private towerKinds(): TowerKind[] {
+    return ['cannon', 'rapid', 'cryo', 'homing'];
+  }
+
+  private addTowerTypeButton(kind: TowerKind, x: number, y: number): void {
     const spec = GAMEPLAY_CONFIG.tower[kind];
-    const button = this.add.rectangle(x, 71, 112, 30, 0x263b38)
-      .setStrokeStyle(1, spec.color).setInteractive({ useHandCursor: true }).setDepth(12);
+    const button = this.add.rectangle(x, y, 136, 34, 0x263b38)
+      .setStrokeStyle(2, spec.color)
+      .setInteractive({ useHandCursor: true });
     button.on('pointerdown', () => this.selectTowerKind(kind));
-    this.add.text(x, 71, `${spec.shortLabel} · ${spec.cost}`, this.hudStyle(8, '#d9e8dc')).setOrigin(0.5).setDepth(13);
+    const label = this.add.text(x, y, `${spec.shortLabel} · ${spec.cost}`, this.hudStyle(11, '#d9e8dc')).setOrigin(0.5);
+    this.buildSheet.add([button, label]);
     this.towerTypeButtons.push(button);
   }
 
-  private addWeaponButton(kind: WeaponKind, x: number): void {
+  private toggleBuildSheet(): void {
+    if (this.mode !== 'playing') return;
+    this.setBuildSheet(!this.buildSheetOpen, true);
+  }
+
+  private setBuildSheet(open: boolean, animate: boolean): void {
+    this.buildSheetOpen = open;
+    const openY = GAMEPLAY_CONFIG.scene.height
+      - GAMEPLAY_CONFIG.hud.dockHeight
+      - GAMEPLAY_CONFIG.hud.buildSheetHeight;
+    const y = open ? openY : GAMEPLAY_CONFIG.scene.height;
+    this.tweens.killTweensOf(this.buildSheet);
+    if (!animate) {
+      this.buildSheet.y = y;
+      return;
+    }
+    this.tweens.add({
+      targets: this.buildSheet,
+      y,
+      duration: 160,
+      ease: 'Quad.easeOut',
+    });
+  }
+
+  private addWeaponButton(kind: WeaponKind, x: number, y: number): void {
     const labels: Record<WeaponKind, string> = {
-      pulse: '1 · КАРАБИН',
-      rail: '2 · РЕЛЬСА',
-      scatter: '3 · ДРОБОВИК',
+      pulse: '1 КАРАБИН',
+      rail: '2 РЕЛЬСА',
+      scatter: '3 ДРОБЬ',
     };
-    const button = this.add.rectangle(x, 613, 132, 32, 0x263b38)
+    const button = this.add.rectangle(x, y, 110, 32, 0x263b38)
       .setStrokeStyle(1, 0x759182).setInteractive({ useHandCursor: true }).setDepth(12);
     button.on('pointerdown', () => this.selectWeapon(kind));
-    this.add.text(x, 613, labels[kind], this.hudStyle(9, '#d9e8dc')).setOrigin(0.5).setDepth(13);
+    this.add.text(x, y, labels[kind], this.hudStyle(9, '#d9e8dc')).setOrigin(0.5).setDepth(13);
     this.weaponButtons.push(button);
   }
 
@@ -301,15 +370,7 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private createActors(): void {
-    this.player = this.add.circle(this.playerX, this.playerY, GAMEPLAY_CONFIG.player.radius, 0x40d9bd)
-      .setStrokeStyle(3, 0xd0ffdd).setDepth(7);
-    this.playerBarrel = this.add.rectangle(
-      this.playerX + GAMEPLAY_CONFIG.player.barrelOffset,
-      this.playerY,
-      GAMEPLAY_CONFIG.player.barrelLength,
-      GAMEPLAY_CONFIG.player.barrelThickness,
-      0xf4fff8,
-    ).setDepth(8);
+    this.player = this.add.image(this.playerX, this.playerY, 'hero').setDepth(7);
     this.createMobileButtons();
   }
 
@@ -333,10 +394,13 @@ export class DefenseScene extends Phaser.Scene {
       one: Phaser.Input.Keyboard.KeyCodes.ONE,
       two: Phaser.Input.Keyboard.KeyCodes.TWO,
       three: Phaser.Input.Keyboard.KeyCodes.THREE,
+      b: Phaser.Input.Keyboard.KeyCodes.B,
     }) as Keys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
-      if (this.mode !== 'playing' || currentlyOver.length > 0 || pointer.y < 112) return;
+      const dockTop = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight;
+      if (this.mode !== 'playing' || currentlyOver.length > 0
+        || pointer.y < GAMEPLAY_CONFIG.hud.topHeight || pointer.y > dockTop) return;
       this.pointerTarget = new Phaser.Math.Vector2(pointer.x, pointer.y);
     });
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
@@ -349,12 +413,13 @@ export class DefenseScene extends Phaser.Scene {
 
   private createMobileButtons(): void {
     if (!this.sys.game.device.input.touch) return;
-    const fire = this.add.circle(884, 553, 34, 0x8b593e, 0.9)
+    const buttonY = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight - 46;
+    const fire = this.add.circle(884, buttonY, 34, 0x8b593e, 0.9)
       .setStrokeStyle(2, 0xf1b57d).setInteractive().setDepth(20);
-    const pulse = this.add.circle(805, 553, 29, 0x315b61, 0.9)
+    const pulse = this.add.circle(805, buttonY, 29, 0x315b61, 0.9)
       .setStrokeStyle(2, 0x7de0ca).setInteractive().setDepth(20);
-    this.add.text(884, 553, 'ОГОНЬ', this.hudStyle(9, '#fff0d9')).setOrigin(0.5).setDepth(21);
-    this.add.text(805, 553, 'Q', this.hudStyle(15, '#d5fff3')).setOrigin(0.5).setDepth(21);
+    this.add.text(884, buttonY, 'ОГОНЬ', this.hudStyle(9, '#fff0d9')).setOrigin(0.5).setDepth(21);
+    this.add.text(805, buttonY, 'Q', this.hudStyle(15, '#d5fff3')).setOrigin(0.5).setDepth(21);
     fire.on('pointerdown', () => { this.fireButtonHeld = true; });
     fire.on('pointerup', () => { this.fireButtonHeld = false; });
     fire.on('pointerout', () => { this.fireButtonHeld = false; });
@@ -392,7 +457,7 @@ export class DefenseScene extends Phaser.Scene {
         align: 'center', lineSpacing: 9,
       }).setOrigin(0.5);
     const controls = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 350,
-      'WASD / стрелки — движение   •   Пробел — огонь   •   Q — ЭМИ   •   P / Esc — пауза', {
+      'WASD — движение   •   1 2 3 — оружие   •   Пробел — огонь   •   Q — ЭМИ   •   B — стройка   •   P — пауза', {
         fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#91aaa0',
       }).setOrigin(0.5);
     this.modal.add([overlay, panel, title, pitch, controls]);
@@ -447,10 +512,10 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTowerKind = 'cannon';
     this.selectedWeapon = 'pulse';
     this.selectedTower = null;
+    this.setBuildSheet(false, false);
     this.refreshTowerTypeButtons();
     this.refreshWeaponButtons();
-    this.player.setPosition(this.playerX, this.playerY).setVisible(true).setFillStyle(0x40d9bd);
-    this.playerBarrel.setPosition(this.playerX + GAMEPLAY_CONFIG.player.barrelOffset, this.playerY).setVisible(true);
+    this.player.setPosition(this.playerX, this.playerY).setVisible(true).clearTint().setRotation(0);
     this.pointerTarget = null;
     this.statusText.setText('Построй башни на площадках или отбивай врагов лично.');
     this.launchWave();
@@ -458,13 +523,13 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private clearRun(): void {
-    this.enemies.forEach((enemy) => enemy.body.destroy());
+    this.enemies.forEach((enemy) => {
+      enemy.body.destroy();
+      enemy.healthBar.destroy();
+    });
     this.towers.forEach((tower) => {
-      tower.base.destroy();
-      tower.barrel.destroy();
-      tower.secondBarrel?.destroy();
-      tower.core.destroy();
-      tower.typeLabel.destroy();
+      tower.sprite.destroy();
+      tower.levelLabel.destroy();
       tower.rangeRing.destroy();
     });
     this.projectiles.forEach((projectile) => projectile.body.destroy());
@@ -475,7 +540,7 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTower = null;
     this.slots.forEach((slot) => {
       slot.tower = null;
-      slot.marker.setVisible(true).setFillStyle(0x1b292b);
+      slot.marker.setVisible(true);
       slot.label.setVisible(true);
     });
     this.pulseEffect?.destroy();
@@ -503,6 +568,7 @@ export class DefenseScene extends Phaser.Scene {
       this.usePulse();
       this.pulseButtonHeld = false;
     }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.b)) this.toggleBuildSheet();
     if (Phaser.Input.Keyboard.JustDown(this.keys.one)) this.selectWeapon('pulse');
     if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.selectWeapon('rail');
     if (Phaser.Input.Keyboard.JustDown(this.keys.three)) this.selectWeapon('scatter');
@@ -538,15 +604,16 @@ export class DefenseScene extends Phaser.Scene {
 
     const target = this.findClosestEnemy(this.playerX, this.playerY, GAMEPLAY_CONFIG.player.targetRange);
     if (target) {
-      this.playerBarrel.setPosition(this.playerX, this.playerY)
-        .setRotation(Phaser.Math.Angle.Between(this.playerX, this.playerY, target.body.x, target.body.y));
+      this.player.setRotation(Phaser.Math.Angle.Between(this.playerX, this.playerY, target.body.x, target.body.y));
+    } else if (dx !== 0 || dy !== 0) {
+      this.player.setRotation(Math.atan2(dy, dx));
     }
 
     if ((this.keys.space.isDown || this.fireButtonHeld) && this.playerFireCooldown <= 0 && target) {
       this.fireHeroWeapon(target);
     }
 
-    if (this.invulnerableTimer <= 0) this.player.setFillStyle(0x40d9bd);
+    if (this.invulnerableTimer <= 0) this.player.clearTint();
   }
 
   private findClosestEnemy(x: number, y: number, range: number): Enemy | null {
@@ -606,7 +673,7 @@ export class DefenseScene extends Phaser.Scene {
 
   private refreshTowerTypeButtons(): void {
     this.towerTypeButtons.forEach((button, index) => {
-      const kind = (['cannon', 'rapid', 'cryo'] as const)[index];
+      const kind = this.towerKinds()[index];
       if (!kind) return;
       const selected = kind === this.selectedTowerKind;
       button.setFillStyle(selected ? GAMEPLAY_CONFIG.tower[kind].color : 0x263b38);
@@ -626,13 +693,33 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private refreshWeaponButtons(): void {
+    const fireReady = this.playerFireCooldown <= 0;
     this.weaponButtons.forEach((button, index) => {
       const kind = (['pulse', 'rail', 'scatter'] as const)[index];
       if (!kind) return;
       const selected = kind === this.selectedWeapon;
       button.setFillStyle(selected ? 0x397960 : 0x263b38);
-      button.setAlpha(selected ? 1 : GAMEPLAY_CONFIG.ui.unselectedButtonAlpha);
+      button.setAlpha(selected
+        ? (fireReady ? 1 : 0.45)
+        : GAMEPLAY_CONFIG.ui.unselectedButtonAlpha);
+      button.setStrokeStyle(selected && fireReady ? 2 : 1, selected ? 0xf3cf79 : 0x759182);
     });
+  }
+
+  private refreshHotkeyHighlights(): void {
+    const playing = this.mode === 'playing';
+    const fireReady = playing && this.playerFireCooldown <= 0;
+    const pulseReady = playing && this.pulseCooldown <= 0;
+    this.fireKeyButton.setFillStyle(fireReady ? 0x8b593e : 0x263b38);
+    this.fireKeyButton.setAlpha(fireReady ? 1 : 0.45);
+    this.fireCooldownText.setText(this.playerFireCooldown > 0 ? this.playerFireCooldown.toFixed(1) : 'SPACE');
+    this.pulseKeyButton.setFillStyle(pulseReady ? 0x2f6d66 : 0x263b38);
+    this.pulseKeyButton.setAlpha(pulseReady ? 1 : 0.45);
+    this.pulseKeyLabel.setText(this.pulseCooldown > 0 ? this.pulseCooldown.toFixed(1) : 'Q');
+    this.buildButton.setFillStyle(this.buildSheetOpen ? 0x2f6a52 : 0x263b38);
+    this.buildButton.setAlpha(playing ? 1 : 0.5);
+    this.buildButton.setStrokeStyle(2, this.buildSheetOpen ? 0xf3cf79 : 0x8fbf9a);
+    this.refreshWeaponButtons();
   }
 
   private usePulse(): void {
@@ -662,9 +749,11 @@ export class DefenseScene extends Phaser.Scene {
       const enemy = this.enemies[index];
       if (!enemy) continue;
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - seconds);
-      this.moveEnemyAlongRoute(enemy, seconds);
+      this.moveEnemy(enemy, seconds);
+      this.syncEnemyHealthBar(enemy);
       if (enemy.segment >= GAMEPLAY_CONFIG.route.length - 1) {
         enemy.body.destroy();
+        enemy.healthBar.destroy();
         this.enemies.splice(index, 1);
         const breachDamage = enemy.kind === 'boss'
           ? GAMEPLAY_CONFIG.base.bossBreachDamage
@@ -685,15 +774,42 @@ export class DefenseScene extends Phaser.Scene {
         this.playerHealth = Math.max(0, this.playerHealth - damage);
         this.playerDamageCooldown = GAMEPLAY_CONFIG.player.damageCooldown;
         this.invulnerableTimer = GAMEPLAY_CONFIG.player.invulnerabilityDuration;
-        this.player.setFillStyle(0xff776f);
+        this.player.setTint(0xff776f);
         this.statusText.setText('ГЕРОЙ ПОЛУЧИЛ УРОН!');
         if (this.playerHealth <= 0) this.endGame('Герой повержен');
       }
     }
   }
 
+  private moveEnemy(enemy: Enemy, seconds: number): void {
+    if (enemy.kind === 'flyer') {
+      this.moveFlyingEnemy(enemy, seconds);
+      return;
+    }
+    this.moveEnemyAlongRoute(enemy, seconds);
+  }
+
+  private enemyMoveSpeed(enemy: Enemy): number {
+    return enemy.slowTimer > 0 ? enemy.speed * enemy.slowFactor : enemy.speed;
+  }
+
+  private moveFlyingEnemy(enemy: Enemy, seconds: number): void {
+    const goalX = GAMEPLAY_CONFIG.base.x;
+    const goalY = GAMEPLAY_CONFIG.base.y;
+    const dx = goalX - enemy.body.x;
+    const dy = goalY - enemy.body.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= GAMEPLAY_CONFIG.wave.flyingArrivalRadius) {
+      enemy.segment = GAMEPLAY_CONFIG.route.length - 1;
+      return;
+    }
+    const step = Math.min(this.enemyMoveSpeed(enemy) * seconds, distance);
+    enemy.body.x += (dx / distance) * step;
+    enemy.body.y += (dy / distance) * step;
+  }
+
   private moveEnemyAlongRoute(enemy: Enemy, seconds: number): void {
-    const speed = enemy.slowTimer > 0 ? enemy.speed * enemy.slowFactor : enemy.speed;
+    const speed = this.enemyMoveSpeed(enemy);
     let distanceLeft = speed * seconds;
     while (distanceLeft > 0 && enemy.segment < GAMEPLAY_CONFIG.route.length - 1) {
       const next = GAMEPLAY_CONFIG.route[enemy.segment + 1];
@@ -726,8 +842,7 @@ export class DefenseScene extends Phaser.Scene {
       const target = this.findClosestEnemy(tower.x, tower.y, range);
       if (!target) return;
 
-      tower.barrel.setRotation(Phaser.Math.Angle.Between(tower.x, tower.y, target.body.x, target.body.y));
-      tower.secondBarrel?.setRotation(tower.barrel.rotation);
+      tower.sprite.setRotation(Phaser.Math.Angle.Between(tower.x, tower.y, target.body.x, target.body.y));
       const damagePerLevel = tower.kind === 'cannon'
         ? GAMEPLAY_CONFIG.tower.cannonDamagePerLevel
         : tower.kind === 'rapid'
@@ -759,7 +874,14 @@ export class DefenseScene extends Phaser.Scene {
             slowDuration: GAMEPLAY_CONFIG.tower.cryoBaseSlowDuration
               + levelGain * GAMEPLAY_CONFIG.tower.cryoSlowDurationPerLevel,
           }
-          : { color: spec.projectileColor };
+          : tower.kind === 'homing'
+            ? {
+              color: spec.projectileColor,
+              lifetime: GAMEPLAY_CONFIG.tower.homingProjectileLifetime,
+              turnRate: GAMEPLAY_CONFIG.tower.homingTurnRate
+                + levelGain * GAMEPLAY_CONFIG.tower.homingTurnRatePerLevel,
+            }
+            : { color: spec.projectileColor };
       const projectileSpeed = tower.kind === 'rapid'
         ? GAMEPLAY_CONFIG.tower.rapidProjectileSpeed
         : GAMEPLAY_CONFIG.tower.projectileSpeed;
@@ -782,6 +904,7 @@ export class DefenseScene extends Phaser.Scene {
       splashRadius?: number;
       slowFactor?: number;
       slowDuration?: number;
+      turnRate?: number;
     } = {},
     angleOverride?: number,
   ): void {
@@ -792,10 +915,12 @@ export class DefenseScene extends Phaser.Scene {
       : GAMEPLAY_CONFIG.projectile.towerRadius;
     const body = this.add.circle(x, y, radius, color)
       .setDepth(6);
+    const turnRate = options.turnRate ?? 0;
     this.projectiles.push({
       body,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
+      speed,
       damage,
       source,
       lifetime: options.lifetime ?? GAMEPLAY_CONFIG.projectile.defaultLifetime,
@@ -804,13 +929,32 @@ export class DefenseScene extends Phaser.Scene {
       splashRadius: options.splashRadius ?? GAMEPLAY_CONFIG.projectile.defaultSplashRadius,
       slowFactor: options.slowFactor ?? GAMEPLAY_CONFIG.projectile.defaultSlowFactor,
       slowDuration: options.slowDuration ?? GAMEPLAY_CONFIG.projectile.defaultSlowDuration,
+      turnRate,
+      steerTarget: turnRate > 0 ? target : null,
     });
+  }
+
+  private steerProjectile(projectile: Projectile, seconds: number): void {
+    const target = projectile.steerTarget;
+    if (!target || projectile.turnRate <= 0 || !this.enemies.includes(target)) return;
+    const desired = Math.atan2(target.body.y - projectile.body.y, target.body.x - projectile.body.x);
+    const current = Math.atan2(projectile.vy, projectile.vx);
+    const next = this.rotateToward(current, desired, projectile.turnRate * seconds);
+    projectile.vx = Math.cos(next) * projectile.speed;
+    projectile.vy = Math.sin(next) * projectile.speed;
+  }
+
+  private rotateToward(current: number, desired: number, maxStep: number): number {
+    const fullTurn = Math.PI * 2;
+    const delta = ((desired - current + Math.PI) % fullTurn + fullTurn) % fullTurn - Math.PI;
+    return current + Phaser.Math.Clamp(delta, -maxStep, maxStep);
   }
 
   private updateProjectiles(seconds: number): void {
     for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = this.projectiles[index];
       if (!projectile) continue;
+      this.steerProjectile(projectile, seconds);
       projectile.body.x += projectile.vx * seconds;
       projectile.body.y += projectile.vy * seconds;
       projectile.lifetime -= seconds;
@@ -847,19 +991,38 @@ export class DefenseScene extends Phaser.Scene {
         }
       }
       if (removeProjectile || projectile.lifetime <= 0 || projectile.body.x < 0
-        || projectile.body.x > GAMEPLAY_CONFIG.scene.width || projectile.body.y < 112
-        || projectile.body.y > GAMEPLAY_CONFIG.scene.height) {
+        || projectile.body.x > GAMEPLAY_CONFIG.scene.width
+        || projectile.body.y < GAMEPLAY_CONFIG.hud.topHeight
+        || projectile.body.y > GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight) {
         projectile.body.destroy();
         this.projectiles.splice(index, 1);
       }
     }
   }
 
+  private syncEnemyHealthBar(enemy: Enemy): void {
+    const width = enemy.kind === 'boss' ? 44 : enemy.kind === 'brute' ? 36 : 32;
+    const height = 5;
+    const lift = enemy.kind === 'boss' ? 30 : enemy.kind === 'brute' ? 26 : 22;
+    const x = enemy.body.x - width / 2;
+    const y = enemy.body.y - lift;
+    const ratio = Phaser.Math.Clamp(enemy.health / enemy.maxHealth, 0, 1);
+    enemy.healthBar.clear();
+    enemy.healthBar.fillStyle(0x140e0c, 0.92);
+    enemy.healthBar.fillRect(x - 1, y - 1, width + 2, height + 2);
+    enemy.healthBar.fillStyle(ratio > 0.35 ? 0x7dce6a : 0xe05a4f, 1);
+    enemy.healthBar.fillRect(x, y, Math.max(2, width * ratio), height);
+  }
+
   private damageEnemy(enemy: Enemy, damage: number): void {
     enemy.health -= damage;
-    if (enemy.health > 0) return;
+    if (enemy.health > 0) {
+      this.syncEnemyHealthBar(enemy);
+      return;
+    }
     const index = this.enemies.indexOf(enemy);
     if (index < 0) return;
+    enemy.healthBar.destroy();
     enemy.body.destroy();
     this.enemies.splice(index, 1);
     this.kills += 1;
@@ -879,17 +1042,7 @@ export class DefenseScene extends Phaser.Scene {
       GAMEPLAY_CONFIG.wave.maxEnemies,
     );
     for (let index = 0; index < count; index += 1) {
-      if (this.wave % GAMEPLAY_CONFIG.wave.bossEvery === 0 && index === count - 1) {
-        this.spawnQueue.push('boss');
-      } else if (this.wave >= GAMEPLAY_CONFIG.wave.bruteStartWave
-        && index % GAMEPLAY_CONFIG.wave.bruteEvery === GAMEPLAY_CONFIG.wave.bruteEvery - 1) {
-        this.spawnQueue.push('brute');
-      } else if (this.wave >= GAMEPLAY_CONFIG.wave.raiderStartWave
-        && index % GAMEPLAY_CONFIG.wave.raiderEvery === GAMEPLAY_CONFIG.wave.raiderEvery - 1) {
-        this.spawnQueue.push('raider');
-      } else {
-        this.spawnQueue.push('scout');
-      }
+      this.spawnQueue.push(this.enemyKindForSpawn(index, count));
     }
     this.spawnCooldown = GAMEPLAY_CONFIG.wave.initialSpawnDelay;
     this.statusText.setText(this.wave % GAMEPLAY_CONFIG.wave.bossEvery === 0
@@ -961,6 +1114,26 @@ export class DefenseScene extends Phaser.Scene {
     return Math.max(GAMEPLAY_CONFIG.wave.minimumSpawnInterval, baseInterval * phaseMultiplier);
   }
 
+  private enemyKindForSpawn(index: number, count: number): EnemyKind {
+    const wave = GAMEPLAY_CONFIG.wave;
+    if (this.wave % wave.bossEvery === 0 && index === count - 1) return 'boss';
+    if (this.wave >= wave.bruteStartWave && index % wave.bruteEvery === wave.bruteEvery - 1) return 'brute';
+    if (this.wave >= wave.raiderStartWave && index % wave.raiderEvery === wave.raiderEvery - 1) return 'raider';
+    if (this.wave >= wave.flyingStartWave && index % wave.flyingEvery === wave.flyingEvery - 1) return 'flyer';
+    return 'scout';
+  }
+
+  private flyingSpawnPoint(): Point {
+    const minY = GAMEPLAY_CONFIG.hud.topHeight + GAMEPLAY_CONFIG.wave.flyingSpawnPadding;
+    const maxY = GAMEPLAY_CONFIG.scene.height
+      - GAMEPLAY_CONFIG.hud.dockHeight
+      - GAMEPLAY_CONFIG.wave.flyingSpawnPadding;
+    return {
+      x: GAMEPLAY_CONFIG.wave.flyingSpawnX,
+      y: Phaser.Math.Between(minY, maxY),
+    };
+  }
+
   private spawnEnemy(kind: EnemyKind): void {
     const isBoss = kind === 'boss';
     const enemySpec = GAMEPLAY_CONFIG.enemy[kind];
@@ -968,11 +1141,13 @@ export class DefenseScene extends Phaser.Scene {
       ? { ...enemySpec, hp: GAMEPLAY_CONFIG.wave.bossBaseHealth + this.wave * GAMEPLAY_CONFIG.wave.bossHealthPerWave }
       : enemySpec;
     const scale = 1 + this.wave * GAMEPLAY_CONFIG.wave.healthScalePerWave;
-    const start = GAMEPLAY_CONFIG.route[0];
-    const body = this.add.circle(start.x, start.y, stats.radius, stats.color)
-      .setStrokeStyle(isBoss ? 4 : 2, 0xffe4c5).setDepth(5);
-    this.enemies.push({
+    const start = kind === 'flyer' ? this.flyingSpawnPoint() : GAMEPLAY_CONFIG.route[0];
+    const body = this.add.image(start.x, start.y, `enemy-${kind}`).setDepth(5);
+    if (isBoss) body.setScale(1.05);
+    const healthBar = this.add.graphics().setDepth(6);
+    const enemy: Enemy = {
       body,
+      healthBar,
       kind,
       health: stats.hp * scale,
       maxHealth: stats.hp * scale,
@@ -982,7 +1157,9 @@ export class DefenseScene extends Phaser.Scene {
       segment: 0,
       slowTimer: 0,
       slowFactor: 1,
-    });
+    };
+    this.enemies.push(enemy);
+    this.syncEnemyHealthBar(enemy);
   }
 
   private selectOrBuildTower(x: number, y: number): void {
@@ -991,6 +1168,11 @@ export class DefenseScene extends Phaser.Scene {
     if (!slot) return;
     if (slot.tower) {
       this.selectTower(slot.tower);
+      this.setBuildSheet(false, true);
+      return;
+    }
+    if (!this.buildSheetOpen) {
+      this.statusText.setText('НАЖМИ B, ЧТОБЫ ОТКРЫТЬ СТРОИТЕЛЬСТВО');
       return;
     }
     const spec = GAMEPLAY_CONFIG.tower[this.selectedTowerKind];
@@ -1002,25 +1184,25 @@ export class DefenseScene extends Phaser.Scene {
     this.coins -= spec.cost;
     const rangeRing = this.add.circle(x, y, spec.range, spec.color, 0.08)
       .setStrokeStyle(1, spec.color, 0.6).setVisible(false).setDepth(1);
-    const base = this.add.circle(x, y, 18, spec.color)
-      .setStrokeStyle(3, 0xe5f3dc).setDepth(4).setInteractive({ useHandCursor: true });
-    const barrel = this.add.rectangle(x + 14, y, this.selectedTowerKind === 'cannon' ? 24 : 21, 7, spec.projectileColor).setDepth(5);
-    const secondBarrel = this.selectedTowerKind === 'rapid'
-      ? this.add.rectangle(x + 14, y + 7, 19, 5, spec.projectileColor).setDepth(5)
-      : null;
-    const core = this.add.circle(x, y, 7, 0x172322).setStrokeStyle(2, spec.projectileColor).setDepth(6);
-    const typeLabel = this.add.text(x, y - 27, this.selectedTowerKind === 'cannon' ? 'C' : this.selectedTowerKind === 'rapid' ? 'R' : 'F', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#f4f5dd',
+    const sprite = this.add.image(x, y, `tower-${this.selectedTowerKind}`)
+      .setOrigin(0.4, 0.5)
+      .setDepth(5)
+      .setInteractive({ useHandCursor: true });
+    const levelLabel = this.add.text(x, y + 22, '1', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#f4f5dd',
     }).setOrigin(0.5).setDepth(6);
     const tower: Tower = {
       x,
       y,
       kind: this.selectedTowerKind,
       level: 1,
+      invested: spec.cost,
       cooldown: GAMEPLAY_CONFIG.tower.initialCooldown,
-      base, barrel, secondBarrel, core, typeLabel, rangeRing,
+      sprite,
+      levelLabel,
+      rangeRing,
     };
-    base.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
+    sprite.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
       event.stopPropagation();
       this.selectTower(tower);
     });
@@ -1031,6 +1213,7 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTower = tower;
     this.showTowerRange(tower);
     this.statusText.setText(`${spec.name.toUpperCase()} УСТАНОВЛЕНА · УР. 1`);
+    this.setBuildSheet(false, true);
     this.refreshHud();
   }
 
@@ -1058,20 +1241,14 @@ export class DefenseScene extends Phaser.Scene {
       return;
     }
     this.coins -= cost;
+    tower.invested += cost;
     tower.level += 1;
     const spec = GAMEPLAY_CONFIG.tower[tower.kind];
-    tower.base.setFillStyle(
-      tower.level === GAMEPLAY_CONFIG.tower.upgradeMaximumLevel
-        ? Phaser.Display.Color.ValueToColor(spec.color).darken(GAMEPLAY_CONFIG.tower.maximumLevelDarken).color
-        : spec.color,
-    );
-    tower.base.setRadius(
-      GAMEPLAY_CONFIG.tower.baseRadius + tower.level * GAMEPLAY_CONFIG.tower.baseRadiusPerLevel,
-    );
-    tower.core.setRadius(
-      GAMEPLAY_CONFIG.tower.coreRadius + tower.level * GAMEPLAY_CONFIG.tower.coreRadiusPerLevel,
-    );
-    tower.typeLabel.setText(`${tower.kind === 'cannon' ? 'C' : tower.kind === 'rapid' ? 'R' : 'F'}${tower.level}`);
+    tower.sprite.setScale(1 + (tower.level - 1) * 0.08);
+    if (tower.level === GAMEPLAY_CONFIG.tower.upgradeMaximumLevel) {
+      tower.sprite.setTint(Phaser.Display.Color.ValueToColor(spec.color).darken(GAMEPLAY_CONFIG.tower.maximumLevelDarken).color);
+    }
+    tower.levelLabel.setText(String(tower.level));
     const rangeGain = tower.kind === 'rapid'
       ? GAMEPLAY_CONFIG.tower.rapidRangePerLevel
       : GAMEPLAY_CONFIG.tower.otherRangePerLevel;
@@ -1085,17 +1262,50 @@ export class DefenseScene extends Phaser.Scene {
       + (tower.level - 1) * GAMEPLAY_CONFIG.economy.upgradeCostPerLevel;
   }
 
-  private refreshUpgradeButton(): void {
-    if (!this.selectedTower) {
-      this.upgradeLabel.setText('ВЫБЕРИ БАШНЮ');
+  private towerSellRefund(tower: Tower): number {
+    return Math.round(tower.invested * GAMEPLAY_CONFIG.economy.sellRefundRatio);
+  }
+
+  private sellSelectedTower(): void {
+    const tower = this.selectedTower;
+    if (this.mode !== 'playing' || !tower) {
+      this.statusText.setText('ВЫБЕРИ БАШНЮ, ЧТОБЫ ПРОДАТЬ');
       return;
     }
+    const refund = this.towerSellRefund(tower);
+    const slot = this.slots.find((item) => item.tower === tower);
+    this.coins += refund;
+    tower.sprite.destroy();
+    tower.levelLabel.destroy();
+    tower.rangeRing.destroy();
+    this.towers = this.towers.filter((item) => item !== tower);
+    if (slot) {
+      slot.tower = null;
+      slot.marker.setVisible(true);
+      slot.label.setVisible(true);
+    }
+    this.selectedTower = null;
+    this.showTowerRange(null);
+    this.statusText.setText(`БАШНЯ ПРОДАНА · +${refund} МОНЕТ`);
+    this.refreshHud();
+  }
+
+  private refreshUpgradeButton(): void {
+    if (!this.selectedTower) {
+      this.upgradeLabel.setText('УЛУЧШИТЬ');
+      this.sellLabel.setText('ПРОДАТЬ');
+      this.sellButton.setAlpha(0.45);
+      return;
+    }
+    const refund = this.towerSellRefund(this.selectedTower);
+    this.sellLabel.setText(`ПРОДАТЬ ${refund}`);
+    this.sellButton.setAlpha(1);
     if (this.selectedTower.level >= GAMEPLAY_CONFIG.tower.upgradeMaximumLevel) {
-      this.upgradeLabel.setText('МАКС. УРОВЕНЬ');
+      this.upgradeLabel.setText('МАКС.');
       return;
     }
     const cost = this.towerUpgradeCost(this.selectedTower);
-    this.upgradeLabel.setText(`УЛУЧШИТЬ · ${cost}`);
+    this.upgradeLabel.setText(`+УР ${cost}`);
   }
 
   private togglePause(): void {
@@ -1196,16 +1406,9 @@ export class DefenseScene extends Phaser.Scene {
     this.baseText.setText(`БАЗА ${this.baseHealth}`);
     this.coinsText.setText(`МОНЕТЫ ${this.coins}`);
     this.playerText.setText(`ГЕРОЙ ${this.playerHealth}`);
-    this.phaseText.setText(this.phase === 2
-      ? 'ФАЗА 2 · ВРАГИ БЫСТРЕЕ · ВОЛНЫ ЧАЩЕ'
-      : 'ФАЗА 2 ПОСЛЕ ВОЛНЫ 2');
-    const weaponNames: Record<WeaponKind, string> = {
-      pulse: 'КАРАБИН', rail: 'РЕЛЬСА', scatter: 'ДРОБОВИК',
-    };
-    const pulseStatus = this.pulseCooldown > 0 ? `ЭМИ: ${this.pulseCooldown.toFixed(1)}с` : 'ЭМИ: ГОТОВ';
-    this.weaponNameText.setText(`ОРУЖИЕ: ${weaponNames[this.selectedWeapon]}`);
-    this.fireCooldownText.setText(`ПРОБЕЛ: ОГОНЬ  ·  Q: ${pulseStatus}`);
+    this.phaseText.setText(this.phase === 2 ? 'ФАЗА 2' : 'ФАЗА 1');
     this.refreshUpgradeButton();
+    this.refreshHotkeyHighlights();
   }
 
   private refreshHud(): void {

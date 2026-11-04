@@ -1,5 +1,5 @@
-export type EnemyKind = 'scout' | 'raider' | 'brute' | 'boss';
-export type TowerKind = 'cannon' | 'rapid' | 'cryo';
+export type EnemyKind = 'scout' | 'raider' | 'brute' | 'boss' | 'flyer';
+export type TowerKind = 'cannon' | 'rapid' | 'cryo' | 'homing';
 export type WeaponKind = 'pulse' | 'rail' | 'scatter';
 
 export interface Point {
@@ -48,7 +48,7 @@ export const GAMEPLAY_CONFIG = {
     speed: 230,
     maxHealth: 100,
     start: { x: 88, y: 340 },
-    bounds: { left: 20, right: 22, top: 126, bottom: 24 },
+    bounds: { left: 20, right: 22, top: 48, bottom: 92 },
     radius: 15,
     barrelOffset: 15,
     barrelLength: 22,
@@ -62,6 +62,8 @@ export const GAMEPLAY_CONFIG = {
     invulnerabilityDuration: 0.25,
   },
   base: {
+    x: 914,
+    y: 470,
     maxHealth: 100,
     breachDamage: 10,
     bruteBreachDamage: 18,
@@ -72,6 +74,7 @@ export const GAMEPLAY_CONFIG = {
     bossKillBonus: 40,
     upgradeBaseCostMultiplier: 0.65,
     upgradeCostPerLevel: 20,
+    sellRefundRatio: 0.7,
   },
   pulse: {
     radius: 128,
@@ -94,13 +97,18 @@ export const GAMEPLAY_CONFIG = {
     bruteEvery: 5,
     raiderStartWave: 2,
     raiderEvery: 3,
+    flyingStartWave: 3,
+    flyingEvery: 4,
+    flyingSpawnX: 0,
+    flyingSpawnPadding: 28,
+    flyingArrivalRadius: 36,
     initialSpawnDelay: 0.4,
     baseSpawnInterval: 1.1,
     spawnIntervalReductionPerWave: 0.035,
     minimumSpawnInterval: 0.34,
     interWaveDelay: 3,
-    healthScalePerWave: 0.08,
-    speedScalePerWave: 0.015,
+    healthScalePerWave: 0.12,
+    speedScalePerWave: 0.025,
     bossBaseHealth: 460,
     bossHealthPerWave: 28,
   },
@@ -109,6 +117,7 @@ export const GAMEPLAY_CONFIG = {
     raider: { hp: 26, speed: 96, bounty: 7, radius: 10, color: 0xe89562 },
     brute: { hp: 100, speed: 35, bounty: 12, radius: 16, color: 0xc97067 },
     boss: { hp: 460, speed: 28, bounty: 35, radius: 23, color: 0xc17193 },
+    flyer: { hp: 48, speed: 74, bounty: 8, radius: 11, color: 0x7eb6d8 },
     collisionRadius: 12,
     bossExtraCollisionRadius: 20,
     regularExtraCollisionRadius: 10,
@@ -152,6 +161,10 @@ export const GAMEPLAY_CONFIG = {
       name: 'Крио-башня', shortLabel: 'КРИО', cost: 60, color: 0x598fc2, projectileColor: 0x8bdcff,
       damage: 10, fireInterval: 0.88, range: 162, upgradeDescription: 'замедление сильнее и дольше',
     },
+    homing: {
+      name: 'Самонаводка', shortLabel: 'НАВОДКА', cost: 65, color: 0xc4a24a, projectileColor: 0xf3e27a,
+      damage: 16, fireInterval: 0.74, range: 180, upgradeDescription: 'урон +4, быстрее доворот',
+    },
     rapidProjectileSpeed: 560,
     projectileSpeed: 390,
     initialCooldown: 0.2,
@@ -176,6 +189,9 @@ export const GAMEPLAY_CONFIG = {
     cryoMinimumSlowFactor: 0.34,
     cryoBaseSlowDuration: 1.3,
     cryoSlowDurationPerLevel: 0.45,
+    homingTurnRate: 2.8,
+    homingTurnRatePerLevel: 0.55,
+    homingProjectileLifetime: 2.2,
     upgradeMaximumLevel: 3,
   } satisfies Record<TowerKind, TowerSpec> & Record<string, number | string | TowerSpec>,
   route: [
@@ -196,8 +212,13 @@ export const GAMEPLAY_CONFIG = {
     { x: 560, y: 120 },
     { x: 580, y: 320 },
     { x: 820, y: 320 },
-    { x: 840, y: 560 },
+    { x: 840, y: 500 },
   ] satisfies Point[],
+  hud: {
+    topHeight: 40,
+    dockHeight: 78,
+    buildSheetHeight: 54,
+  },
   ui: {
     unselectedButtonAlpha: 0.82,
   },
