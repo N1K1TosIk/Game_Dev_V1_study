@@ -207,16 +207,6 @@ export const GAMEPLAY_CONFIG = {
     endPastBase: 36,
     minLeg: 96,
   },
-  route: [
-    { x: -18, y: 188 },
-    { x: 208, y: 188 },
-    { x: 208, y: 438 },
-    { x: 438, y: 438 },
-    { x: 438, y: 164 },
-    { x: 690, y: 164 },
-    { x: 690, y: 470 },
-    { x: 978, y: 470 },
-  ] satisfies Point[],
   buildSlots: [
     { x: 100, y: 320 },
     { x: 300, y: 300 },

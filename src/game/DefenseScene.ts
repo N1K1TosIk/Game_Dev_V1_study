@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import {
+  generateRoute,
+  type RouteRules,
+} from './generateRoute';
+import {
   GAMEPLAY_CONFIG,
   type EnemyKind,
   type EnemySpec,
@@ -99,6 +103,11 @@ export class DefenseScene extends Phaser.Scene {
   private enemies: Enemy[] = [];
   private towers: Tower[] = [];
   private slots: BuildSlot[] = [];
+  private route: Point[] = [];
+  private basePoint: Point = { x: GAMEPLAY_CONFIG.base.x, y: GAMEPLAY_CONFIG.base.y };
+  private pathTiles: Phaser.GameObjects.Image[] = [];
+  private baseSprite!: Phaser.GameObjects.Image;
+  private baseLabel!: Phaser.GameObjects.Text;
   private projectiles: Projectile[] = [];
   private spawnQueue: EnemyKind[] = [];
   private selectedTower: Tower | null = null;
@@ -192,7 +201,6 @@ export class DefenseScene extends Phaser.Scene {
     const width = GAMEPLAY_CONFIG.scene.width;
     const height = GAMEPLAY_CONFIG.scene.height;
     this.add.tileSprite(width / 2, height / 2, width, height, 'tile-grass').setDepth(0);
-    this.stampPath();
 
     this.add.text(22, GAMEPLAY_CONFIG.hud.topHeight + 14, 'МАРШРУТ ВРАГА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#d5e7c8',
@@ -213,16 +221,48 @@ export class DefenseScene extends Phaser.Scene {
       return { x, y, marker, label, tower: null };
     });
 
-    this.add.image(GAMEPLAY_CONFIG.base.x, GAMEPLAY_CONFIG.base.y, 'base').setDepth(4);
-    this.add.text(GAMEPLAY_CONFIG.base.x, GAMEPLAY_CONFIG.base.y + 42, 'БАЗА', {
+    this.baseSprite = this.add.image(this.basePoint.x, this.basePoint.y, 'base').setDepth(4);
+    this.baseLabel = this.add.text(this.basePoint.x, this.basePoint.y + GAMEPLAY_CONFIG.routeGen.baseLabelOffset, 'БАЗА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#c6e9d4',
     }).setOrigin(0.5).setDepth(5);
+    this.rollMap();
+  }
+
+  private routeRules(): RouteRules {
+    const gen = GAMEPLAY_CONFIG.routeGen;
+    const scene = GAMEPLAY_CONFIG.scene;
+    return {
+      startX: gen.startX,
+      baseX: scene.width - gen.baseInset,
+      endX: scene.width - gen.baseInset + gen.endPastBase,
+      minY: GAMEPLAY_CONFIG.hud.topHeight + gen.hudPadding,
+      maxY: scene.height - GAMEPLAY_CONFIG.hud.dockHeight - gen.hudPadding,
+      minX: gen.slotMargin,
+      maxX: scene.width - gen.slotMargin,
+      turnCount: gen.turnCount,
+      minLeg: gen.minLeg,
+      slotCount: gen.slotCount,
+      slotOffset: gen.slotOffset,
+      corridorHalfWidth: gen.corridorHalfWidth,
+    };
+  }
+
+  private rollMap(): void {
+    const seed = (Date.now() ^ Math.floor(Math.random() * 0x100000000)) >>> 0;
+    const layout = generateRoute(seed, this.routeRules());
+    this.route = layout.route;
+    this.basePoint = layout.base;
+    this.pathTiles.forEach((tile) => tile.destroy());
+    this.pathTiles = [];
+    this.stampPath();
+    this.baseSprite.setPosition(this.basePoint.x, this.basePoint.y);
+    this.baseLabel.setPosition(this.basePoint.x, this.basePoint.y + GAMEPLAY_CONFIG.routeGen.baseLabelOffset);
   }
 
   private stampPath(): void {
-    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
-      const start = GAMEPLAY_CONFIG.route[index];
-      const end = GAMEPLAY_CONFIG.route[index + 1];
+    for (let index = 0; index < this.route.length - 1; index += 1) {
+      const start = this.route[index];
+      const end = this.route[index + 1];
       if (!start || !end) continue;
       const dx = end.x - start.x;
       const dy = end.y - start.y;
@@ -235,7 +275,7 @@ export class DefenseScene extends Phaser.Scene {
         const x = start.x + dx * t;
         const y = start.y + dy * t;
         for (const offset of [-18, 0, 18]) {
-          this.add.image(x + nx * offset, y + ny * offset, 'tile-path').setDepth(1);
+          this.pathTiles.push(this.add.image(x + nx * offset, y + ny * offset, 'tile-path').setDepth(1));
         }
       }
     }
@@ -496,6 +536,7 @@ export class DefenseScene extends Phaser.Scene {
     this.modal?.destroy(true);
     this.modal = null;
     this.clearRun();
+    this.rollMap();
     this.mode = 'playing';
     this.wave = 0;
     this.baseHealth = GAMEPLAY_CONFIG.base.maxHealth;
@@ -751,7 +792,7 @@ export class DefenseScene extends Phaser.Scene {
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - seconds);
       this.moveEnemy(enemy, seconds);
       this.syncEnemyHealthBar(enemy);
-      if (enemy.segment >= GAMEPLAY_CONFIG.route.length - 1) {
+      if (enemy.segment >= this.route.length - 1) {
         enemy.body.destroy();
         enemy.healthBar.destroy();
         this.enemies.splice(index, 1);
@@ -794,13 +835,13 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private moveFlyingEnemy(enemy: Enemy, seconds: number): void {
-    const goalX = GAMEPLAY_CONFIG.base.x;
-    const goalY = GAMEPLAY_CONFIG.base.y;
+    const goalX = this.basePoint.x;
+    const goalY = this.basePoint.y;
     const dx = goalX - enemy.body.x;
     const dy = goalY - enemy.body.y;
     const distance = Math.hypot(dx, dy);
     if (distance <= GAMEPLAY_CONFIG.wave.flyingArrivalRadius) {
-      enemy.segment = GAMEPLAY_CONFIG.route.length - 1;
+      enemy.segment = this.route.length - 1;
       return;
     }
     const step = Math.min(this.enemyMoveSpeed(enemy) * seconds, distance);
@@ -811,8 +852,8 @@ export class DefenseScene extends Phaser.Scene {
   private moveEnemyAlongRoute(enemy: Enemy, seconds: number): void {
     const speed = this.enemyMoveSpeed(enemy);
     let distanceLeft = speed * seconds;
-    while (distanceLeft > 0 && enemy.segment < GAMEPLAY_CONFIG.route.length - 1) {
-      const next = GAMEPLAY_CONFIG.route[enemy.segment + 1];
+    while (distanceLeft > 0 && enemy.segment < this.route.length - 1) {
+      const next = this.route[enemy.segment + 1];
       if (!next) return;
       const dx = next.x - enemy.body.x;
       const dy = next.y - enemy.body.y;
@@ -1141,7 +1182,7 @@ export class DefenseScene extends Phaser.Scene {
       ? { ...enemySpec, hp: GAMEPLAY_CONFIG.wave.bossBaseHealth + this.wave * GAMEPLAY_CONFIG.wave.bossHealthPerWave }
       : enemySpec;
     const scale = 1 + this.wave * GAMEPLAY_CONFIG.wave.healthScalePerWave;
-    const start = kind === 'flyer' ? this.flyingSpawnPoint() : GAMEPLAY_CONFIG.route[0];
+    const start = kind === 'flyer' ? this.flyingSpawnPoint() : this.route[0];
     const body = this.add.image(start.x, start.y, `enemy-${kind}`).setDepth(5);
     if (isBoss) body.setScale(1.05);
     const healthBar = this.add.graphics().setDepth(6);
