@@ -391,8 +391,9 @@ export class DefenseScene extends Phaser.Scene {
       .setStrokeStyle(2, spec.color)
       .setInteractive({ useHandCursor: true });
     button.on('pointerdown', () => this.selectTowerKind(kind));
-    const label = this.add.text(x, y, `${spec.shortLabel} · ${spec.cost}`, this.hudStyle(11, '#d9e8dc')).setOrigin(0.5);
-    this.buildSheet.add([button, label]);
+    const icon = this.add.image(x - 46, y, `tower-${kind}`).setOrigin(0.4, 0.5).setScale(0.62);
+    const label = this.add.text(x + 16, y, `${spec.shortLabel} · ${spec.cost}`, this.hudStyle(11, '#d9e8dc')).setOrigin(0.5);
+    this.buildSheet.add([button, icon, label]);
     this.towerTypeButtons.push(button);
   }
 
