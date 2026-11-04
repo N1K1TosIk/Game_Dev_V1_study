@@ -26,6 +26,8 @@ interface Enemy {
   segment: number;
   slowTimer: number;
   slowFactor: number;
+  animTime: number;
+  animFrame: number;
 }
 
 interface Tower {
@@ -161,7 +163,8 @@ export class DefenseScene extends Phaser.Scene {
     for (const key of [
       'tile-grass', 'tile-path', 'tile-slot',
       'hero', 'hero-cape', 'base',
-      'enemy-scout', 'enemy-raider', 'enemy-brute', 'enemy-boss', 'enemy-flyer',
+      'enemy-scout', 'enemy-scout-step', 'enemy-raider', 'enemy-raider-step',
+      'enemy-brute', 'enemy-brute-step', 'enemy-boss', 'enemy-boss-step', 'enemy-flyer',
       'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing',
     ]) {
       this.load.image(key, `assets/${key}.png`);
@@ -932,6 +935,7 @@ export class DefenseScene extends Phaser.Scene {
       if (!enemy) continue;
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - seconds);
       this.moveEnemy(enemy, seconds);
+      this.animateEnemy(enemy, seconds);
       this.syncEnemyHealthBar(enemy);
       if (enemy.segment >= this.route.length - 1) {
         enemy.body.destroy();
@@ -961,6 +965,17 @@ export class DefenseScene extends Phaser.Scene {
         if (this.playerHealth <= 0) this.endGame('Герой повержен');
       }
     }
+  }
+
+  private animateEnemy(enemy: Enemy, seconds: number): void {
+    if (enemy.kind === 'flyer') return;
+    enemy.animTime += seconds;
+    const interval = GAMEPLAY_CONFIG.enemy.stepSeconds * (enemy.slowTimer > 0 ? 1.6 : 1);
+    if (enemy.animTime < interval) return;
+    enemy.animTime = 0;
+    enemy.animFrame = enemy.animFrame === 0 ? 1 : 0;
+    const frame = enemy.animFrame === 0 ? '' : '-step';
+    enemy.body.setTexture(`enemy-${enemy.kind}${frame}`);
   }
 
   private moveEnemy(enemy: Enemy, seconds: number): void {
@@ -1340,6 +1355,8 @@ export class DefenseScene extends Phaser.Scene {
       segment: 0,
       slowTimer: 0,
       slowFactor: 1,
+      animTime: 0,
+      animFrame: 0,
     };
     this.enemies.push(enemy);
     this.syncEnemyHealthBar(enemy);

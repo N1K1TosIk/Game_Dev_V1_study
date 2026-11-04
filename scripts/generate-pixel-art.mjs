@@ -134,7 +134,7 @@ function heroCape(art) {
   art.rect(8, 8, 4, 3, 0xf0d0a0);
 }
 
-function enemy(art, body, accent, eye) {
+function enemy(art, body, accent, eye, step = 0) {
   const { rect, set } = art;
   rect(8, 10, 16, 12, body);
   rect(10, 8, 12, 4, accent);
@@ -142,8 +142,41 @@ function enemy(art, body, accent, eye) {
   rect(18, 13, 3, 3, eye);
   set(12, 14, 0x1a120c);
   set(19, 14, 0x1a120c);
-  rect(9, 22, 4, 5, 0x2a211c);
-  rect(19, 22, 4, 5, 0x2a211c);
+  rect(9, 22 - step * 2, 4, 5, 0x2a211c);
+  rect(19, 22 + step * 2, 4, 5, 0x2a211c);
+}
+
+function brute(step) {
+  return sized(40, 40, ({ rect, set }) => {
+    const lift = step * 2;
+    rect(8, 10, 24, 18, 0xc97067);
+    rect(12, 6, 16, 6, 0xdea098);
+    rect(13, 16, 5, 4, 0xffe4dc);
+    rect(22, 16, 5, 4, 0xffe4dc);
+    set(15, 18, 0x3a1614);
+    set(24, 18, 0x3a1614);
+    rect(10, 28 - lift, 6, 7, 0x5c302c);
+    rect(24, 28 + lift, 6, 7, 0x5c302c);
+    rect(6, 14, 4, 8, 0xa85a54);
+    rect(30, 14, 4, 8, 0xa85a54);
+  });
+}
+
+function boss(step) {
+  return sized(48, 48, ({ rect, set }) => {
+    const lift = step * 2;
+    rect(10, 14, 28, 22, 0xc17193);
+    rect(14, 8, 20, 8, 0xe0a0bc);
+    rect(16, 20, 6, 5, 0xffe4f0);
+    rect(26, 20, 6, 5, 0xffe4f0);
+    set(18, 22, 0x4a1830);
+    set(28, 22, 0x4a1830);
+    rect(12, 36 - lift, 8, 8, 0x6e3450);
+    rect(28, 36 + lift, 8, 8, 0x6e3450);
+    rect(6, 16, 5, 14, 0x9a5878);
+    rect(37, 16, 5, 14, 0x9a5878);
+    rect(20, 4, 8, 5, 0xf2c6da);
+  });
 }
 
 const sprites = {
@@ -152,7 +185,8 @@ const sprites = {
   'tile-slot.png': slot,
   'hero.png': sized(32, 32, hero),
   'hero-cape.png': sized(32, 32, heroCape),
-  'enemy-scout.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8)),
+  'enemy-scout.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8, 0)),
+  'enemy-scout-step.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8, 1)),
   'enemy-flyer.png': sized(32, 32, (art) => {
     enemy(art, 0x7eb6d8, 0xb7e4f6, 0xf4fbff);
     art.rect(2, 12, 6, 3, 0xd8f4ff);
@@ -161,34 +195,17 @@ const sprites = {
     art.rect(25, 10, 3, 2, 0x9fd0ea);
   }),
   'enemy-raider.png': sized(32, 32, (art) => {
-    enemy(art, 0xe89562, 0xffb27a, 0xffe0c8);
+    enemy(art, 0xe89562, 0xffb27a, 0xffe0c8, 0);
     art.rect(6, 14, 4, 2, 0xffd0a4);
   }),
-  'enemy-brute.png': sized(40, 40, ({ rect, set }) => {
-    rect(8, 10, 24, 18, 0xc97067);
-    rect(12, 6, 16, 6, 0xdea098);
-    rect(13, 16, 5, 4, 0xffe4dc);
-    rect(22, 16, 5, 4, 0xffe4dc);
-    set(15, 18, 0x3a1614);
-    set(24, 18, 0x3a1614);
-    rect(10, 28, 6, 7, 0x5c302c);
-    rect(24, 28, 6, 7, 0x5c302c);
-    rect(6, 14, 4, 8, 0xa85a54);
-    rect(30, 14, 4, 8, 0xa85a54);
+  'enemy-raider-step.png': sized(32, 32, (art) => {
+    enemy(art, 0xe89562, 0xffb27a, 0xffe0c8, 1);
+    art.rect(6, 14, 4, 2, 0xffd0a4);
   }),
-  'enemy-boss.png': sized(48, 48, ({ rect, set }) => {
-    rect(10, 14, 28, 22, 0xc17193);
-    rect(14, 8, 20, 8, 0xe0a0bc);
-    rect(16, 20, 6, 5, 0xffe4f0);
-    rect(26, 20, 6, 5, 0xffe4f0);
-    set(18, 22, 0x4a1830);
-    set(28, 22, 0x4a1830);
-    rect(12, 36, 8, 8, 0x6e3450);
-    rect(28, 36, 8, 8, 0x6e3450);
-    rect(6, 16, 5, 14, 0x9a5878);
-    rect(37, 16, 5, 14, 0x9a5878);
-    rect(20, 4, 8, 5, 0xf2c6da);
-  }),
+  'enemy-brute.png': brute(0),
+  'enemy-brute-step.png': brute(1),
+  'enemy-boss.png': boss(0),
+  'enemy-boss-step.png': boss(1),
   'base.png': sized(48, 64, ({ rect }) => {
     rect(6, 18, 36, 40, 0x347e73);
     rect(10, 8, 28, 16, 0x4ea88d);
