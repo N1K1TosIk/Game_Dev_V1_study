@@ -164,7 +164,7 @@ export class DefenseScene extends Phaser.Scene {
       'tile-grass', 'tile-path', 'tile-slot',
       'hero', 'hero-cape', 'base',
       'enemy-scout', 'enemy-scout-step', 'enemy-raider', 'enemy-raider-step',
-      'enemy-brute', 'enemy-brute-step', 'enemy-boss', 'enemy-boss-step', 'enemy-flyer',
+      'enemy-brute', 'enemy-brute-step', 'enemy-boss', 'enemy-boss-step', 'enemy-flyer', 'enemy-flyer-flap',
       'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing',
     ]) {
       this.load.image(key, `assets/${key}.png`);
@@ -968,14 +968,20 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private animateEnemy(enemy: Enemy, seconds: number): void {
-    if (enemy.kind === 'flyer') return;
     enemy.animTime += seconds;
-    const interval = GAMEPLAY_CONFIG.enemy.stepSeconds * (enemy.slowTimer > 0 ? 1.6 : 1);
+    const baseInterval = enemy.kind === 'flyer'
+      ? GAMEPLAY_CONFIG.enemy.flyerFlapSeconds
+      : GAMEPLAY_CONFIG.enemy.stepSeconds;
+    const interval = baseInterval * (enemy.slowTimer > 0 ? 1.6 : 1);
     if (enemy.animTime < interval) return;
     enemy.animTime = 0;
     enemy.animFrame = enemy.animFrame === 0 ? 1 : 0;
-    const frame = enemy.animFrame === 0 ? '' : '-step';
-    enemy.body.setTexture(`enemy-${enemy.kind}${frame}`);
+    enemy.body.setTexture(this.enemyFrame(enemy));
+  }
+
+  private enemyFrame(enemy: Enemy): string {
+    if (enemy.kind === 'flyer') return enemy.animFrame === 0 ? 'enemy-flyer' : 'enemy-flyer-flap';
+    return enemy.animFrame === 0 ? `enemy-${enemy.kind}` : `enemy-${enemy.kind}-step`;
   }
 
   private moveEnemy(enemy: Enemy, seconds: number): void {

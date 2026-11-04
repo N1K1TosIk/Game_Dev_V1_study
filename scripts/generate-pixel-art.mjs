@@ -162,6 +162,16 @@ function brute(step) {
   });
 }
 
+function flyer(flap) {
+  return sized(32, 32, (art) => {
+    enemy(art, 0x7eb6d8, 0xb7e4f6, 0xf4fbff, 0);
+    const wingY = flap ? 8 : 14;
+    art.rect(2, wingY, 6, 3, 0xd8f4ff);
+    art.rect(24, wingY, 6, 3, 0xd8f4ff);
+    art.rect(4, wingY - 2, 3, 2, 0x9fd0ea);
+    art.rect(25, wingY - 2, 3, 2, 0x9fd0ea);
+  });
+}
 function boss(step) {
   return sized(48, 48, ({ rect, set }) => {
     const lift = step * 2;
@@ -187,13 +197,8 @@ const sprites = {
   'hero-cape.png': sized(32, 32, heroCape),
   'enemy-scout.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8, 0)),
   'enemy-scout-step.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8, 1)),
-  'enemy-flyer.png': sized(32, 32, (art) => {
-    enemy(art, 0x7eb6d8, 0xb7e4f6, 0xf4fbff);
-    art.rect(2, 12, 6, 3, 0xd8f4ff);
-    art.rect(24, 12, 6, 3, 0xd8f4ff);
-    art.rect(4, 10, 3, 2, 0x9fd0ea);
-    art.rect(25, 10, 3, 2, 0x9fd0ea);
-  }),
+  'enemy-flyer.png': flyer(0),
+  'enemy-flyer-flap.png': flyer(1),
   'enemy-raider.png': sized(32, 32, (art) => {
     enemy(art, 0xe89562, 0xffb27a, 0xffe0c8, 0);
     art.rect(6, 14, 4, 2, 0xffd0a4);
