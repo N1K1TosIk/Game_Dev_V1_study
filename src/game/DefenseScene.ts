@@ -464,7 +464,7 @@ export class DefenseScene extends Phaser.Scene {
     const price = GAMEPLAY_CONFIG.shop.charm.price;
     if (!this.spendCoins(price)) return;
     this.charmActive = true;
-    this.statusText.setText('АМУЛЕТ КУПЛЕН НА ЭТОТ ЗАБЕГ');
+    this.statusText.setText('АМУЛЕТ УСИЛИЛ ОРУЖИЕ ГЕРОЯ НА ЭТОТ ЗАБЕГ');
     this.refreshShopLabels();
     this.refreshHud();
   }
@@ -807,18 +807,22 @@ export class DefenseScene extends Phaser.Scene {
     return target;
   }
 
+  private heroWeaponDamage(baseDamage: number): number {
+    return this.charmActive ? baseDamage * GAMEPLAY_CONFIG.shop.charm.damageMultiplier : baseDamage;
+  }
+
   private fireHeroWeapon(target: Enemy): void {
     const angle = Phaser.Math.Angle.Between(this.playerX, this.playerY, target.body.x, target.body.y);
     if (this.selectedWeapon === 'pulse') {
       const spec = GAMEPLAY_CONFIG.weapon.pulse;
-      this.fireProjectile(this.playerX, this.playerY, target, spec.damage, spec.speed, 'player', { color: spec.color });
+      this.fireProjectile(this.playerX, this.playerY, target, this.heroWeaponDamage(spec.damage), spec.speed, 'player', { color: spec.color });
       this.playerFireCooldown = spec.cooldown;
       return;
     }
 
     if (this.selectedWeapon === 'rail') {
       const spec = GAMEPLAY_CONFIG.weapon.rail;
-      this.fireProjectile(this.playerX, this.playerY, target, spec.damage, spec.speed, 'player', {
+      this.fireProjectile(this.playerX, this.playerY, target, this.heroWeaponDamage(spec.damage), spec.speed, 'player', {
         color: spec.color,
         pierce: spec.pierce,
         lifetime: spec.lifetime,
@@ -831,7 +835,7 @@ export class DefenseScene extends Phaser.Scene {
     const pelletCount = spec.pelletCount ?? 1;
     for (let index = 0; index < pelletCount; index += 1) {
       const spreadIndex = index - (pelletCount - 1) / 2;
-      this.fireProjectile(this.playerX, this.playerY, target, spec.damage, spec.speed, 'player', {
+      this.fireProjectile(this.playerX, this.playerY, target, this.heroWeaponDamage(spec.damage), spec.speed, 'player', {
         color: spec.color,
         lifetime: spec.lifetime,
       }, angle + spreadIndex * (spec.spreadAngle ?? 0));
