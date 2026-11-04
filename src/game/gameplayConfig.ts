@@ -78,7 +78,7 @@ export const GAMEPLAY_CONFIG = {
   },
   shop: {
     panelHeight: 58,
-    heroSkin: { id: 'cape', price: 45, name: 'Плащ героя' },
+    heroSkin: { id: 'cape', price: 45, name: 'Плащ героя', texture: 'hero-cape' },
     charm: { id: 'damage', price: 30, name: 'Боевой амулет', damageMultiplier: 1.5 },
   },
   pulse: {

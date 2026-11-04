@@ -127,6 +127,13 @@ function hero(art) {
   set(16, 12, 0x08322e);
 }
 
+function heroCape(art) {
+  hero(art);
+  art.rect(6, 9, 5, 16, 0x8d3b4a);
+  art.rect(5, 11, 3, 12, 0xc45b68);
+  art.rect(8, 8, 4, 3, 0xf0d0a0);
+}
+
 function enemy(art, body, accent, eye) {
   const { rect, set } = art;
   rect(8, 10, 16, 12, body);
@@ -144,6 +151,7 @@ const sprites = {
   'tile-path.png': path,
   'tile-slot.png': slot,
   'hero.png': sized(32, 32, hero),
+  'hero-cape.png': sized(32, 32, heroCape),
   'enemy-scout.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8)),
   'enemy-flyer.png': sized(32, 32, (art) => {
     enemy(art, 0x7eb6d8, 0xb7e4f6, 0xf4fbff);

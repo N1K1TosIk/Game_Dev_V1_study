@@ -160,7 +160,7 @@ export class DefenseScene extends Phaser.Scene {
   preload(): void {
     for (const key of [
       'tile-grass', 'tile-path', 'tile-slot',
-      'hero', 'base',
+      'hero', 'hero-cape', 'base',
       'enemy-scout', 'enemy-raider', 'enemy-brute', 'enemy-boss', 'enemy-flyer',
       'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing',
     ]) {
@@ -169,9 +169,12 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.heroSkinOwned = this.readHeroSkin();
     this.drawMap();
     this.createHud();
     this.createActors();
+    this.applyHeroSkin();
+    this.refreshShopLabels();
     this.createInput();
     this.bestWave = this.readBestWave();
     this.showMenu();
@@ -446,6 +449,8 @@ export class DefenseScene extends Phaser.Scene {
     const price = GAMEPLAY_CONFIG.shop.heroSkin.price;
     if (!this.spendCoins(price)) return;
     this.heroSkinOwned = true;
+    this.saveHeroSkin();
+    this.applyHeroSkin();
     this.statusText.setText('ПЛАЩ КУПЛЕН');
     this.refreshShopLabels();
     this.refreshHud();
@@ -479,6 +484,27 @@ export class DefenseScene extends Phaser.Scene {
     const charm = GAMEPLAY_CONFIG.shop.charm;
     this.shopSkinLabel.setText(this.heroSkinOwned ? `${skin.name} · КУПЛЕНО` : `${skin.name} · ${skin.price}`);
     this.shopCharmLabel.setText(this.charmActive ? `${charm.name} · АКТИВЕН` : `${charm.name} · ${charm.price}`);
+  }
+
+  private applyHeroSkin(): void {
+    const texture = this.heroSkinOwned ? GAMEPLAY_CONFIG.shop.heroSkin.texture : 'hero';
+    this.player.setTexture(texture);
+  }
+
+  private readHeroSkin(): boolean {
+    try {
+      return window.localStorage.getItem('last-line-hero-skin') === GAMEPLAY_CONFIG.shop.heroSkin.id;
+    } catch {
+      return false;
+    }
+  }
+
+  private saveHeroSkin(): void {
+    try {
+      window.localStorage.setItem('last-line-hero-skin', GAMEPLAY_CONFIG.shop.heroSkin.id);
+    } catch {
+      // Local storage may be unavailable in private browsing.
+    }
   }
 
   private setBuildSheet(open: boolean, animate: boolean): void {
