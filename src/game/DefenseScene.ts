@@ -56,6 +56,9 @@ interface Projectile {
   splashRadius: number;
   slowFactor: number;
   slowDuration: number;
+  speed: number;
+  turnRate: number;
+  steerTarget: Enemy | null;
 }
 
 interface Keys {
@@ -144,7 +147,7 @@ export class DefenseScene extends Phaser.Scene {
       'tile-grass', 'tile-path', 'tile-slot',
       'hero', 'base',
       'enemy-scout', 'enemy-raider', 'enemy-brute', 'enemy-boss', 'enemy-flyer',
-      'tower-cannon', 'tower-rapid', 'tower-cryo',
+      'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing',
     ]) {
       this.load.image(key, `assets/${key}.png`);
     }
@@ -305,9 +308,13 @@ export class DefenseScene extends Phaser.Scene {
       .setInteractive();
     const title = this.add.text(24, sheetHeight / 2, 'СТРОИТЕЛЬСТВО', this.hudStyle(11, '#d5e7c8')).setOrigin(0, 0.5);
     this.buildSheet.add([panel, title]);
-    this.addTowerTypeButton('cannon', 280, sheetHeight / 2);
-    this.addTowerTypeButton('rapid', 430, sheetHeight / 2);
-    this.addTowerTypeButton('cryo', 580, sheetHeight / 2);
+    this.towerKinds().forEach((kind, index) => {
+      this.addTowerTypeButton(kind, 250 + index * 155, sheetHeight / 2);
+    });
+  }
+
+  private towerKinds(): TowerKind[] {
+    return ['cannon', 'rapid', 'cryo', 'homing'];
   }
 
   private addTowerTypeButton(kind: TowerKind, x: number, y: number): void {
@@ -666,7 +673,7 @@ export class DefenseScene extends Phaser.Scene {
 
   private refreshTowerTypeButtons(): void {
     this.towerTypeButtons.forEach((button, index) => {
-      const kind = (['cannon', 'rapid', 'cryo'] as const)[index];
+      const kind = this.towerKinds()[index];
       if (!kind) return;
       const selected = kind === this.selectedTowerKind;
       button.setFillStyle(selected ? GAMEPLAY_CONFIG.tower[kind].color : 0x263b38);
@@ -867,7 +874,14 @@ export class DefenseScene extends Phaser.Scene {
             slowDuration: GAMEPLAY_CONFIG.tower.cryoBaseSlowDuration
               + levelGain * GAMEPLAY_CONFIG.tower.cryoSlowDurationPerLevel,
           }
-          : { color: spec.projectileColor };
+          : tower.kind === 'homing'
+            ? {
+              color: spec.projectileColor,
+              lifetime: GAMEPLAY_CONFIG.tower.homingProjectileLifetime,
+              turnRate: GAMEPLAY_CONFIG.tower.homingTurnRate
+                + levelGain * GAMEPLAY_CONFIG.tower.homingTurnRatePerLevel,
+            }
+            : { color: spec.projectileColor };
       const projectileSpeed = tower.kind === 'rapid'
         ? GAMEPLAY_CONFIG.tower.rapidProjectileSpeed
         : GAMEPLAY_CONFIG.tower.projectileSpeed;
@@ -890,6 +904,7 @@ export class DefenseScene extends Phaser.Scene {
       splashRadius?: number;
       slowFactor?: number;
       slowDuration?: number;
+      turnRate?: number;
     } = {},
     angleOverride?: number,
   ): void {
@@ -900,10 +915,12 @@ export class DefenseScene extends Phaser.Scene {
       : GAMEPLAY_CONFIG.projectile.towerRadius;
     const body = this.add.circle(x, y, radius, color)
       .setDepth(6);
+    const turnRate = options.turnRate ?? 0;
     this.projectiles.push({
       body,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
+      speed,
       damage,
       source,
       lifetime: options.lifetime ?? GAMEPLAY_CONFIG.projectile.defaultLifetime,
@@ -912,13 +929,32 @@ export class DefenseScene extends Phaser.Scene {
       splashRadius: options.splashRadius ?? GAMEPLAY_CONFIG.projectile.defaultSplashRadius,
       slowFactor: options.slowFactor ?? GAMEPLAY_CONFIG.projectile.defaultSlowFactor,
       slowDuration: options.slowDuration ?? GAMEPLAY_CONFIG.projectile.defaultSlowDuration,
+      turnRate,
+      steerTarget: turnRate > 0 ? target : null,
     });
+  }
+
+  private steerProjectile(projectile: Projectile, seconds: number): void {
+    const target = projectile.steerTarget;
+    if (!target || projectile.turnRate <= 0 || !this.enemies.includes(target)) return;
+    const desired = Math.atan2(target.body.y - projectile.body.y, target.body.x - projectile.body.x);
+    const current = Math.atan2(projectile.vy, projectile.vx);
+    const next = this.rotateToward(current, desired, projectile.turnRate * seconds);
+    projectile.vx = Math.cos(next) * projectile.speed;
+    projectile.vy = Math.sin(next) * projectile.speed;
+  }
+
+  private rotateToward(current: number, desired: number, maxStep: number): number {
+    const fullTurn = Math.PI * 2;
+    const delta = ((desired - current + Math.PI) % fullTurn + fullTurn) % fullTurn - Math.PI;
+    return current + Phaser.Math.Clamp(delta, -maxStep, maxStep);
   }
 
   private updateProjectiles(seconds: number): void {
     for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = this.projectiles[index];
       if (!projectile) continue;
+      this.steerProjectile(projectile, seconds);
       projectile.body.x += projectile.vx * seconds;
       projectile.body.y += projectile.vy * seconds;
       projectile.lifetime -= seconds;

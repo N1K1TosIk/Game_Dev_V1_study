@@ -1,5 +1,5 @@
 export type EnemyKind = 'scout' | 'raider' | 'brute' | 'boss' | 'flyer';
-export type TowerKind = 'cannon' | 'rapid' | 'cryo';
+export type TowerKind = 'cannon' | 'rapid' | 'cryo' | 'homing';
 export type WeaponKind = 'pulse' | 'rail' | 'scatter';
 
 export interface Point {
@@ -161,6 +161,10 @@ export const GAMEPLAY_CONFIG = {
       name: 'Крио-башня', shortLabel: 'КРИО', cost: 60, color: 0x598fc2, projectileColor: 0x8bdcff,
       damage: 10, fireInterval: 0.88, range: 162, upgradeDescription: 'замедление сильнее и дольше',
     },
+    homing: {
+      name: 'Самонаводка', shortLabel: 'НАВОДКА', cost: 65, color: 0xc4a24a, projectileColor: 0xf3e27a,
+      damage: 16, fireInterval: 0.74, range: 180, upgradeDescription: 'урон +4, быстрее доворот',
+    },
     rapidProjectileSpeed: 560,
     projectileSpeed: 390,
     initialCooldown: 0.2,
@@ -185,6 +189,9 @@ export const GAMEPLAY_CONFIG = {
     cryoMinimumSlowFactor: 0.34,
     cryoBaseSlowDuration: 1.3,
     cryoSlowDurationPerLevel: 0.45,
+    homingTurnRate: 2.8,
+    homingTurnRatePerLevel: 0.55,
+    homingProjectileLifetime: 2.2,
     upgradeMaximumLevel: 3,
   } satisfies Record<TowerKind, TowerSpec> & Record<string, number | string | TowerSpec>,
   route: [

@@ -208,6 +208,13 @@ const sprites = {
     rect(20, 17, 16, 6, 0x8bdcff);
     rect(14, 8, 4, 6, 0xeaf8ff);
   }),
+  'tower-homing.png': sized(40, 40, ({ rect, disc }) => {
+    disc(16, 20, 11, 0xc4a24a);
+    disc(16, 20, 6, 0x6a5420);
+    rect(20, 17, 14, 6, 0xf3e27a);
+    rect(30, 15, 6, 3, 0xfff6c4);
+    rect(30, 22, 6, 3, 0xfff6c4);
+  }),
 };
 
 for (const [name, art] of Object.entries(sprites)) {
