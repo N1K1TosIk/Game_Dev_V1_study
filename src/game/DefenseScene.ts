@@ -188,7 +188,7 @@ export class DefenseScene extends Phaser.Scene {
     }
     this.stampPath(field);
 
-    this.add.text(22, 113, 'МАРШРУТ ВРАГА', {
+    this.add.text(22, GAMEPLAY_CONFIG.hud.topHeight + 14, 'МАРШРУТ ВРАГА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#d5e7c8',
     }).setDepth(2);
 
@@ -236,65 +236,70 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private createHud(): void {
-    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 51, GAMEPLAY_CONFIG.scene.width, 102, 0x111d21).setDepth(10);
-    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 102, GAMEPLAY_CONFIG.scene.width, 2, 0x405450).setDepth(11);
+    const width = GAMEPLAY_CONFIG.scene.width;
+    const height = GAMEPLAY_CONFIG.scene.height;
+    const top = GAMEPLAY_CONFIG.hud.topHeight;
+    const dock = GAMEPLAY_CONFIG.hud.dockHeight;
+    const dockTop = height - dock;
+    const actionY = dockTop + 48;
 
-    this.add.text(22, 14, 'LAST LINE', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '18px', fontStyle: 'bold', color: '#d8f4dd',
+    this.add.rectangle(width / 2, top / 2, width, top, 0x111d21).setDepth(10);
+    this.add.rectangle(width / 2, top, width, 2, 0x405450).setDepth(11);
+    this.add.text(16, 9, 'LAST LINE', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '16px', fontStyle: 'bold', color: '#d8f4dd',
     }).setDepth(12);
-    this.waveText = this.add.text(205, 17, 'ВОЛНА 0', this.hudStyle(13, '#e5e8d2')).setDepth(12);
-    this.coinsText = this.add.text(326, 17, 'МОНЕТЫ 110', this.hudStyle(13, '#f3cf79')).setDepth(12);
-    this.baseText = this.add.text(490, 17, 'БАЗА 100', this.hudStyle(13, '#91e0b4')).setDepth(12);
-    this.playerText = this.add.text(630, 17, 'ГЕРОЙ 100', this.hudStyle(13, '#ff9f8e')).setDepth(12);
+    this.waveText = this.add.text(132, 12, 'ВОЛНА 0', this.hudStyle(12, '#e5e8d2')).setDepth(12);
+    this.coinsText = this.add.text(250, 12, 'МОНЕТЫ 110', this.hudStyle(12, '#f3cf79')).setDepth(12);
+    this.baseText = this.add.text(400, 12, 'БАЗА 100', this.hudStyle(12, '#91e0b4')).setDepth(12);
+    this.playerText = this.add.text(520, 12, 'ГЕРОЙ 100', this.hudStyle(12, '#ff9f8e')).setDepth(12);
+    this.phaseText = this.add.text(650, 13, 'ФАЗА 1', this.hudStyle(10, '#f3cf79')).setDepth(12);
 
-    const pause = this.add.rectangle(902, 28, 86, 34, 0x293b3b)
+    const pause = this.add.rectangle(902, top / 2, 78, 26, 0x293b3b)
       .setStrokeStyle(1, 0x759182).setInteractive({ useHandCursor: true }).setDepth(12);
     pause.on('pointerdown', () => this.togglePause());
-    this.add.text(902, 28, 'ПАУЗА', this.hudStyle(10, '#e5efe5')).setOrigin(0.5).setDepth(13);
+    this.add.text(902, top / 2, 'ПАУЗА', this.hudStyle(10, '#e5efe5')).setOrigin(0.5).setDepth(13);
 
-    this.statusText = this.add.text(22, 56, 'Построй башню на свободной площадке', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '11px', color: '#9eafa7',
+    this.add.rectangle(width / 2, dockTop + dock / 2, width, dock, 0x111d21).setDepth(10);
+    this.add.rectangle(width / 2, dockTop, width, 2, 0x405450).setDepth(11);
+    this.statusText = this.add.text(16, dockTop + 8, 'Построй башню на свободной площадке', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#c5d6cc',
     }).setDepth(12);
-    this.phaseText = this.add.text(22, 80, 'ФАЗА 2 ПОСЛЕ ВОЛНЫ 2', this.hudStyle(10, '#f3cf79')).setDepth(12);
 
-    this.addTowerTypeButton('cannon', 390);
-    this.addTowerTypeButton('rapid', 510);
-    this.addTowerTypeButton('cryo', 630);
+    this.weaponNameText = this.add.text(0, 0, '').setVisible(false);
+    this.addWeaponButton('pulse', 150, actionY);
+    this.addWeaponButton('rail', 268, actionY);
+    this.addWeaponButton('scatter', 386, actionY);
+    this.addTowerTypeButton('cannon', 560, actionY);
+    this.addTowerTypeButton('rapid', 668, actionY);
+    this.addTowerTypeButton('cryo', 776, actionY);
+    this.fireCooldownText = this.add.text(700, dockTop + 8, 'ПРОБЕЛ: ОГОНЬ  ·  Q: ЭМИ', this.hudStyle(10, '#b6c9bc')).setDepth(12);
 
-    this.upgradeButton = this.add.rectangle(842, 71, 186, 32, 0x263b38)
+    this.upgradeButton = this.add.rectangle(888, actionY, 120, 32, 0x263b38)
       .setStrokeStyle(1, 0x637d70).setInteractive({ useHandCursor: true }).setDepth(12);
     this.upgradeButton.on('pointerdown', () => this.upgradeSelectedTower());
-    this.upgradeLabel = this.add.text(842, 71, 'ВЫБЕРИ БАШНЮ', this.hudStyle(9, '#a6b8ae'))
+    this.upgradeLabel = this.add.text(888, actionY, 'УЛУЧШИТЬ', this.hudStyle(9, '#a6b8ae'))
       .setOrigin(0.5).setDepth(13);
-
-    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 613, GAMEPLAY_CONFIG.scene.width, 54, 0x111d21).setDepth(10);
-    this.add.rectangle(GAMEPLAY_CONFIG.scene.width / 2, 586, GAMEPLAY_CONFIG.scene.width, 2, 0x405450).setDepth(11);
-    this.weaponNameText = this.add.text(22, 603, 'ОРУЖИЕ', this.hudStyle(10, '#9eafa7')).setDepth(12);
-    this.addWeaponButton('pulse', 178);
-    this.addWeaponButton('rail', 326);
-    this.addWeaponButton('scatter', 474);
-    this.fireCooldownText = this.add.text(614, 604, 'SPACE: ОГОНЬ  ·  Q: ИМПУЛЬС', this.hudStyle(10, '#b6c9bc')).setDepth(12);
   }
 
-  private addTowerTypeButton(kind: TowerKind, x: number): void {
+  private addTowerTypeButton(kind: TowerKind, x: number, y: number): void {
     const spec = GAMEPLAY_CONFIG.tower[kind];
-    const button = this.add.rectangle(x, 71, 112, 30, 0x263b38)
+    const button = this.add.rectangle(x, y, 100, 32, 0x263b38)
       .setStrokeStyle(1, spec.color).setInteractive({ useHandCursor: true }).setDepth(12);
     button.on('pointerdown', () => this.selectTowerKind(kind));
-    this.add.text(x, 71, `${spec.shortLabel} · ${spec.cost}`, this.hudStyle(8, '#d9e8dc')).setOrigin(0.5).setDepth(13);
+    this.add.text(x, y, `${spec.shortLabel} ${spec.cost}`, this.hudStyle(8, '#d9e8dc')).setOrigin(0.5).setDepth(13);
     this.towerTypeButtons.push(button);
   }
 
-  private addWeaponButton(kind: WeaponKind, x: number): void {
+  private addWeaponButton(kind: WeaponKind, x: number, y: number): void {
     const labels: Record<WeaponKind, string> = {
-      pulse: '1 · КАРАБИН',
-      rail: '2 · РЕЛЬСА',
-      scatter: '3 · ДРОБОВИК',
+      pulse: '1 КАРАБИН',
+      rail: '2 РЕЛЬСА',
+      scatter: '3 ДРОБЬ',
     };
-    const button = this.add.rectangle(x, 613, 132, 32, 0x263b38)
+    const button = this.add.rectangle(x, y, 110, 32, 0x263b38)
       .setStrokeStyle(1, 0x759182).setInteractive({ useHandCursor: true }).setDepth(12);
     button.on('pointerdown', () => this.selectWeapon(kind));
-    this.add.text(x, 613, labels[kind], this.hudStyle(9, '#d9e8dc')).setOrigin(0.5).setDepth(13);
+    this.add.text(x, y, labels[kind], this.hudStyle(9, '#d9e8dc')).setOrigin(0.5).setDepth(13);
     this.weaponButtons.push(button);
   }
 
@@ -330,7 +335,9 @@ export class DefenseScene extends Phaser.Scene {
     }) as Keys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
-      if (this.mode !== 'playing' || currentlyOver.length > 0 || pointer.y < 112) return;
+      const dockTop = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight;
+      if (this.mode !== 'playing' || currentlyOver.length > 0
+        || pointer.y < GAMEPLAY_CONFIG.hud.topHeight || pointer.y > dockTop) return;
       this.pointerTarget = new Phaser.Math.Vector2(pointer.x, pointer.y);
     });
     this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
@@ -343,12 +350,13 @@ export class DefenseScene extends Phaser.Scene {
 
   private createMobileButtons(): void {
     if (!this.sys.game.device.input.touch) return;
-    const fire = this.add.circle(884, 553, 34, 0x8b593e, 0.9)
+    const buttonY = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight - 46;
+    const fire = this.add.circle(884, buttonY, 34, 0x8b593e, 0.9)
       .setStrokeStyle(2, 0xf1b57d).setInteractive().setDepth(20);
-    const pulse = this.add.circle(805, 553, 29, 0x315b61, 0.9)
+    const pulse = this.add.circle(805, buttonY, 29, 0x315b61, 0.9)
       .setStrokeStyle(2, 0x7de0ca).setInteractive().setDepth(20);
-    this.add.text(884, 553, 'ОГОНЬ', this.hudStyle(9, '#fff0d9')).setOrigin(0.5).setDepth(21);
-    this.add.text(805, 553, 'Q', this.hudStyle(15, '#d5fff3')).setOrigin(0.5).setDepth(21);
+    this.add.text(884, buttonY, 'ОГОНЬ', this.hudStyle(9, '#fff0d9')).setOrigin(0.5).setDepth(21);
+    this.add.text(805, buttonY, 'Q', this.hudStyle(15, '#d5fff3')).setOrigin(0.5).setDepth(21);
     fire.on('pointerdown', () => { this.fireButtonHeld = true; });
     fire.on('pointerup', () => { this.fireButtonHeld = false; });
     fire.on('pointerout', () => { this.fireButtonHeld = false; });
@@ -842,8 +850,9 @@ export class DefenseScene extends Phaser.Scene {
         }
       }
       if (removeProjectile || projectile.lifetime <= 0 || projectile.body.x < 0
-        || projectile.body.x > GAMEPLAY_CONFIG.scene.width || projectile.body.y < 112
-        || projectile.body.y > GAMEPLAY_CONFIG.scene.height) {
+        || projectile.body.x > GAMEPLAY_CONFIG.scene.width
+        || projectile.body.y < GAMEPLAY_CONFIG.hud.topHeight
+        || projectile.body.y > GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight) {
         projectile.body.destroy();
         this.projectiles.splice(index, 1);
       }
@@ -1205,9 +1214,7 @@ export class DefenseScene extends Phaser.Scene {
     this.baseText.setText(`БАЗА ${this.baseHealth}`);
     this.coinsText.setText(`МОНЕТЫ ${this.coins}`);
     this.playerText.setText(`ГЕРОЙ ${this.playerHealth}`);
-    this.phaseText.setText(this.phase === 2
-      ? 'ФАЗА 2 · ВРАГИ БЫСТРЕЕ · ВОЛНЫ ЧАЩЕ'
-      : 'ФАЗА 2 ПОСЛЕ ВОЛНЫ 2');
+    this.phaseText.setText(this.phase === 2 ? 'ФАЗА 2' : 'ФАЗА 1');
     const weaponNames: Record<WeaponKind, string> = {
       pulse: 'КАРАБИН', rail: 'РЕЛЬСА', scatter: 'ДРОБОВИК',
     };

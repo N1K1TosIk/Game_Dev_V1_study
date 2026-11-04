@@ -48,7 +48,7 @@ export const GAMEPLAY_CONFIG = {
     speed: 230,
     maxHealth: 100,
     start: { x: 88, y: 340 },
-    bounds: { left: 20, right: 22, top: 126, bottom: 24 },
+    bounds: { left: 20, right: 22, top: 48, bottom: 92 },
     radius: 15,
     barrelOffset: 15,
     barrelLength: 22,
@@ -196,8 +196,12 @@ export const GAMEPLAY_CONFIG = {
     { x: 560, y: 120 },
     { x: 580, y: 320 },
     { x: 820, y: 320 },
-    { x: 840, y: 560 },
+    { x: 840, y: 500 },
   ] satisfies Point[],
+  hud: {
+    topHeight: 40,
+    dockHeight: 78,
+  },
   ui: {
     unselectedButtonAlpha: 0.82,
   },
