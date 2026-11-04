@@ -13,6 +13,7 @@ type Mode = 'menu' | 'playing' | 'phase-transition' | 'paused' | 'gameover';
 
 interface Enemy {
   body: Phaser.GameObjects.Image;
+  healthBar: Phaser.GameObjects.Graphics;
   kind: EnemyKind;
   health: number;
   maxHealth: number;
@@ -450,7 +451,10 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private clearRun(): void {
-    this.enemies.forEach((enemy) => enemy.body.destroy());
+    this.enemies.forEach((enemy) => {
+      enemy.body.destroy();
+      enemy.healthBar.destroy();
+    });
     this.towers.forEach((tower) => {
       tower.sprite.destroy();
       tower.levelLabel.destroy();
@@ -653,8 +657,10 @@ export class DefenseScene extends Phaser.Scene {
       if (!enemy) continue;
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - seconds);
       this.moveEnemyAlongRoute(enemy, seconds);
+      this.syncEnemyHealthBar(enemy);
       if (enemy.segment >= GAMEPLAY_CONFIG.route.length - 1) {
         enemy.body.destroy();
+        enemy.healthBar.destroy();
         this.enemies.splice(index, 1);
         const breachDamage = enemy.kind === 'boss'
           ? GAMEPLAY_CONFIG.base.bossBreachDamage
@@ -844,11 +850,29 @@ export class DefenseScene extends Phaser.Scene {
     }
   }
 
+  private syncEnemyHealthBar(enemy: Enemy): void {
+    const width = enemy.kind === 'boss' ? 44 : enemy.kind === 'brute' ? 36 : 32;
+    const height = 5;
+    const lift = enemy.kind === 'boss' ? 30 : enemy.kind === 'brute' ? 26 : 22;
+    const x = enemy.body.x - width / 2;
+    const y = enemy.body.y - lift;
+    const ratio = Phaser.Math.Clamp(enemy.health / enemy.maxHealth, 0, 1);
+    enemy.healthBar.clear();
+    enemy.healthBar.fillStyle(0x140e0c, 0.92);
+    enemy.healthBar.fillRect(x - 1, y - 1, width + 2, height + 2);
+    enemy.healthBar.fillStyle(ratio > 0.35 ? 0x7dce6a : 0xe05a4f, 1);
+    enemy.healthBar.fillRect(x, y, Math.max(2, width * ratio), height);
+  }
+
   private damageEnemy(enemy: Enemy, damage: number): void {
     enemy.health -= damage;
-    if (enemy.health > 0) return;
+    if (enemy.health > 0) {
+      this.syncEnemyHealthBar(enemy);
+      return;
+    }
     const index = this.enemies.indexOf(enemy);
     if (index < 0) return;
+    enemy.healthBar.destroy();
     enemy.body.destroy();
     this.enemies.splice(index, 1);
     this.kills += 1;
@@ -960,8 +984,10 @@ export class DefenseScene extends Phaser.Scene {
     const start = GAMEPLAY_CONFIG.route[0];
     const body = this.add.image(start.x, start.y, `enemy-${kind}`).setDepth(5);
     if (isBoss) body.setScale(1.05);
-    this.enemies.push({
+    const healthBar = this.add.graphics().setDepth(6);
+    const enemy: Enemy = {
       body,
+      healthBar,
       kind,
       health: stats.hp * scale,
       maxHealth: stats.hp * scale,
@@ -971,7 +997,9 @@ export class DefenseScene extends Phaser.Scene {
       segment: 0,
       slowTimer: 0,
       slowFactor: 1,
-    });
+    };
+    this.enemies.push(enemy);
+    this.syncEnemyHealthBar(enemy);
   }
 
   private selectOrBuildTower(x: number, y: number): void {
