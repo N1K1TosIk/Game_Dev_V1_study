@@ -29,6 +29,7 @@ interface Tower {
   y: number;
   kind: TowerKind;
   level: number;
+  invested: number;
   cooldown: number;
   sprite: Phaser.GameObjects.Image;
   levelLabel: Phaser.GameObjects.Text;
@@ -126,6 +127,8 @@ export class DefenseScene extends Phaser.Scene {
   private phaseText!: Phaser.GameObjects.Text;
   private upgradeButton!: Phaser.GameObjects.Rectangle;
   private upgradeLabel!: Phaser.GameObjects.Text;
+  private sellButton!: Phaser.GameObjects.Rectangle;
+  private sellLabel!: Phaser.GameObjects.Text;
   private fireCooldownText!: Phaser.GameObjects.Text;
   private weaponNameText!: Phaser.GameObjects.Text;
   private bestWave = 0;
@@ -280,10 +283,15 @@ export class DefenseScene extends Phaser.Scene {
     this.fireCooldownText = this.add.text(680, dockTop + 8, 'ПРОБЕЛ: ОГОНЬ  ·  Q: ЭМИ', this.hudStyle(10, '#b6c9bc')).setDepth(12);
     this.createBuildSheet(width, height);
 
-    this.upgradeButton = this.add.rectangle(888, actionY, 120, 32, 0x263b38)
+    this.upgradeButton = this.add.rectangle(760, actionY, 116, 32, 0x263b38)
       .setStrokeStyle(1, 0x637d70).setInteractive({ useHandCursor: true }).setDepth(12);
     this.upgradeButton.on('pointerdown', () => this.upgradeSelectedTower());
-    this.upgradeLabel = this.add.text(888, actionY, 'УЛУЧШИТЬ', this.hudStyle(9, '#a6b8ae'))
+    this.upgradeLabel = this.add.text(760, actionY, 'УЛУЧШИТЬ', this.hudStyle(9, '#a6b8ae'))
+      .setOrigin(0.5).setDepth(13);
+    this.sellButton = this.add.rectangle(888, actionY, 116, 32, 0x3a2a28)
+      .setStrokeStyle(1, 0xc98474).setInteractive({ useHandCursor: true }).setDepth(12);
+    this.sellButton.on('pointerdown', () => this.sellSelectedTower());
+    this.sellLabel = this.add.text(888, actionY, 'ПРОДАТЬ', this.hudStyle(9, '#f0c2b6'))
       .setOrigin(0.5).setDepth(13);
   }
 
@@ -1093,6 +1101,7 @@ export class DefenseScene extends Phaser.Scene {
       y,
       kind: this.selectedTowerKind,
       level: 1,
+      invested: spec.cost,
       cooldown: GAMEPLAY_CONFIG.tower.initialCooldown,
       sprite,
       levelLabel,
@@ -1137,6 +1146,7 @@ export class DefenseScene extends Phaser.Scene {
       return;
     }
     this.coins -= cost;
+    tower.invested += cost;
     tower.level += 1;
     const spec = GAMEPLAY_CONFIG.tower[tower.kind];
     tower.sprite.setScale(1 + (tower.level - 1) * 0.08);
@@ -1157,17 +1167,50 @@ export class DefenseScene extends Phaser.Scene {
       + (tower.level - 1) * GAMEPLAY_CONFIG.economy.upgradeCostPerLevel;
   }
 
-  private refreshUpgradeButton(): void {
-    if (!this.selectedTower) {
-      this.upgradeLabel.setText('ВЫБЕРИ БАШНЮ');
+  private towerSellRefund(tower: Tower): number {
+    return Math.round(tower.invested * GAMEPLAY_CONFIG.economy.sellRefundRatio);
+  }
+
+  private sellSelectedTower(): void {
+    const tower = this.selectedTower;
+    if (this.mode !== 'playing' || !tower) {
+      this.statusText.setText('ВЫБЕРИ БАШНЮ, ЧТОБЫ ПРОДАТЬ');
       return;
     }
+    const refund = this.towerSellRefund(tower);
+    const slot = this.slots.find((item) => item.tower === tower);
+    this.coins += refund;
+    tower.sprite.destroy();
+    tower.levelLabel.destroy();
+    tower.rangeRing.destroy();
+    this.towers = this.towers.filter((item) => item !== tower);
+    if (slot) {
+      slot.tower = null;
+      slot.marker.setVisible(true);
+      slot.label.setVisible(true);
+    }
+    this.selectedTower = null;
+    this.showTowerRange(null);
+    this.statusText.setText(`БАШНЯ ПРОДАНА · +${refund} МОНЕТ`);
+    this.refreshHud();
+  }
+
+  private refreshUpgradeButton(): void {
+    if (!this.selectedTower) {
+      this.upgradeLabel.setText('УЛУЧШИТЬ');
+      this.sellLabel.setText('ПРОДАТЬ');
+      this.sellButton.setAlpha(0.45);
+      return;
+    }
+    const refund = this.towerSellRefund(this.selectedTower);
+    this.sellLabel.setText(`ПРОДАТЬ ${refund}`);
+    this.sellButton.setAlpha(1);
     if (this.selectedTower.level >= GAMEPLAY_CONFIG.tower.upgradeMaximumLevel) {
-      this.upgradeLabel.setText('МАКС. УРОВЕНЬ');
+      this.upgradeLabel.setText('МАКС.');
       return;
     }
     const cost = this.towerUpgradeCost(this.selectedTower);
-    this.upgradeLabel.setText(`УЛУЧШИТЬ · ${cost}`);
+    this.upgradeLabel.setText(`+УР ${cost}`);
   }
 
   private togglePause(): void {

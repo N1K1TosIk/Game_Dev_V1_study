@@ -72,6 +72,7 @@ export const GAMEPLAY_CONFIG = {
     bossKillBonus: 40,
     upgradeBaseCostMultiplier: 0.65,
     upgradeCostPerLevel: 20,
+    sellRefundRatio: 0.7,
   },
   pulse: {
     radius: 128,
