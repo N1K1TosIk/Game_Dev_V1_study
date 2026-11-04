@@ -12,7 +12,7 @@ import {
 type Mode = 'menu' | 'playing' | 'phase-transition' | 'paused' | 'gameover';
 
 interface Enemy {
-  body: Phaser.GameObjects.Arc;
+  body: Phaser.GameObjects.Image;
   kind: EnemyKind;
   health: number;
   maxHealth: number;
@@ -29,11 +29,8 @@ interface Tower {
   kind: TowerKind;
   level: number;
   cooldown: number;
-  base: Phaser.GameObjects.Arc;
-  barrel: Phaser.GameObjects.Rectangle;
-  secondBarrel: Phaser.GameObjects.Rectangle | null;
-  core: Phaser.GameObjects.Arc;
-  typeLabel: Phaser.GameObjects.Text;
+  sprite: Phaser.GameObjects.Image;
+  levelLabel: Phaser.GameObjects.Text;
   rangeRing: Phaser.GameObjects.Arc;
 }
 
@@ -82,8 +79,7 @@ interface Keys {
 export class DefenseScene extends Phaser.Scene {
   private mode: Mode = 'menu';
   private keys!: Keys;
-  private player!: Phaser.GameObjects.Arc;
-  private playerBarrel!: Phaser.GameObjects.Rectangle;
+  private player!: Phaser.GameObjects.Image;
   private playerHealth: number = GAMEPLAY_CONFIG.player.maxHealth;
   private playerX: number = GAMEPLAY_CONFIG.player.start.x;
   private playerY: number = GAMEPLAY_CONFIG.player.start.y;
@@ -134,7 +130,12 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   preload(): void {
-    for (const key of ['tile-grass', 'tile-path', 'tile-slot']) {
+    for (const key of [
+      'tile-grass', 'tile-path', 'tile-slot',
+      'hero', 'base',
+      'enemy-scout', 'enemy-raider', 'enemy-brute', 'enemy-boss',
+      'tower-cannon', 'tower-rapid', 'tower-cryo',
+    ]) {
       this.load.image(key, `assets/${key}.png`);
     }
   }
@@ -205,12 +206,10 @@ export class DefenseScene extends Phaser.Scene {
       return { x, y, marker, label, tower: null };
     });
 
-    const base = this.add.rectangle(914, 470, 44, 58, 0x347e73).setStrokeStyle(3, 0xb6f3cd).setDepth(4);
-    this.add.rectangle(914, 470, 17, 22, 0xbaffdc).setDepth(5);
-    this.add.text(914, 510, 'БАЗА', {
+    this.add.image(914, 470, 'base').setDepth(4);
+    this.add.text(914, 512, 'БАЗА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#c6e9d4',
     }).setOrigin(0.5).setDepth(5);
-    base.setDepth(3);
   }
 
   private stampPath(field: Phaser.GameObjects.RenderTexture): void {
@@ -303,15 +302,7 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private createActors(): void {
-    this.player = this.add.circle(this.playerX, this.playerY, GAMEPLAY_CONFIG.player.radius, 0x40d9bd)
-      .setStrokeStyle(3, 0xd0ffdd).setDepth(7);
-    this.playerBarrel = this.add.rectangle(
-      this.playerX + GAMEPLAY_CONFIG.player.barrelOffset,
-      this.playerY,
-      GAMEPLAY_CONFIG.player.barrelLength,
-      GAMEPLAY_CONFIG.player.barrelThickness,
-      0xf4fff8,
-    ).setDepth(8);
+    this.player = this.add.image(this.playerX, this.playerY, 'hero').setDepth(7);
     this.createMobileButtons();
   }
 
@@ -451,8 +442,7 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTower = null;
     this.refreshTowerTypeButtons();
     this.refreshWeaponButtons();
-    this.player.setPosition(this.playerX, this.playerY).setVisible(true).setFillStyle(0x40d9bd);
-    this.playerBarrel.setPosition(this.playerX + GAMEPLAY_CONFIG.player.barrelOffset, this.playerY).setVisible(true);
+    this.player.setPosition(this.playerX, this.playerY).setVisible(true).clearTint().setRotation(0);
     this.pointerTarget = null;
     this.statusText.setText('Построй башни на площадках или отбивай врагов лично.');
     this.launchWave();
@@ -462,11 +452,8 @@ export class DefenseScene extends Phaser.Scene {
   private clearRun(): void {
     this.enemies.forEach((enemy) => enemy.body.destroy());
     this.towers.forEach((tower) => {
-      tower.base.destroy();
-      tower.barrel.destroy();
-      tower.secondBarrel?.destroy();
-      tower.core.destroy();
-      tower.typeLabel.destroy();
+      tower.sprite.destroy();
+      tower.levelLabel.destroy();
       tower.rangeRing.destroy();
     });
     this.projectiles.forEach((projectile) => projectile.body.destroy());
@@ -540,15 +527,16 @@ export class DefenseScene extends Phaser.Scene {
 
     const target = this.findClosestEnemy(this.playerX, this.playerY, GAMEPLAY_CONFIG.player.targetRange);
     if (target) {
-      this.playerBarrel.setPosition(this.playerX, this.playerY)
-        .setRotation(Phaser.Math.Angle.Between(this.playerX, this.playerY, target.body.x, target.body.y));
+      this.player.setRotation(Phaser.Math.Angle.Between(this.playerX, this.playerY, target.body.x, target.body.y));
+    } else if (dx !== 0 || dy !== 0) {
+      this.player.setRotation(Math.atan2(dy, dx));
     }
 
     if ((this.keys.space.isDown || this.fireButtonHeld) && this.playerFireCooldown <= 0 && target) {
       this.fireHeroWeapon(target);
     }
 
-    if (this.invulnerableTimer <= 0) this.player.setFillStyle(0x40d9bd);
+    if (this.invulnerableTimer <= 0) this.player.clearTint();
   }
 
   private findClosestEnemy(x: number, y: number, range: number): Enemy | null {
@@ -687,7 +675,7 @@ export class DefenseScene extends Phaser.Scene {
         this.playerHealth = Math.max(0, this.playerHealth - damage);
         this.playerDamageCooldown = GAMEPLAY_CONFIG.player.damageCooldown;
         this.invulnerableTimer = GAMEPLAY_CONFIG.player.invulnerabilityDuration;
-        this.player.setFillStyle(0xff776f);
+        this.player.setTint(0xff776f);
         this.statusText.setText('ГЕРОЙ ПОЛУЧИЛ УРОН!');
         if (this.playerHealth <= 0) this.endGame('Герой повержен');
       }
@@ -728,8 +716,7 @@ export class DefenseScene extends Phaser.Scene {
       const target = this.findClosestEnemy(tower.x, tower.y, range);
       if (!target) return;
 
-      tower.barrel.setRotation(Phaser.Math.Angle.Between(tower.x, tower.y, target.body.x, target.body.y));
-      tower.secondBarrel?.setRotation(tower.barrel.rotation);
+      tower.sprite.setRotation(Phaser.Math.Angle.Between(tower.x, tower.y, target.body.x, target.body.y));
       const damagePerLevel = tower.kind === 'cannon'
         ? GAMEPLAY_CONFIG.tower.cannonDamagePerLevel
         : tower.kind === 'rapid'
@@ -971,8 +958,8 @@ export class DefenseScene extends Phaser.Scene {
       : enemySpec;
     const scale = 1 + this.wave * GAMEPLAY_CONFIG.wave.healthScalePerWave;
     const start = GAMEPLAY_CONFIG.route[0];
-    const body = this.add.circle(start.x, start.y, stats.radius, stats.color)
-      .setStrokeStyle(isBoss ? 4 : 2, 0xffe4c5).setDepth(5);
+    const body = this.add.image(start.x, start.y, `enemy-${kind}`).setDepth(5);
+    if (isBoss) body.setScale(1.05);
     this.enemies.push({
       body,
       kind,
@@ -1004,15 +991,12 @@ export class DefenseScene extends Phaser.Scene {
     this.coins -= spec.cost;
     const rangeRing = this.add.circle(x, y, spec.range, spec.color, 0.08)
       .setStrokeStyle(1, spec.color, 0.6).setVisible(false).setDepth(1);
-    const base = this.add.circle(x, y, 18, spec.color)
-      .setStrokeStyle(3, 0xe5f3dc).setDepth(4).setInteractive({ useHandCursor: true });
-    const barrel = this.add.rectangle(x + 14, y, this.selectedTowerKind === 'cannon' ? 24 : 21, 7, spec.projectileColor).setDepth(5);
-    const secondBarrel = this.selectedTowerKind === 'rapid'
-      ? this.add.rectangle(x + 14, y + 7, 19, 5, spec.projectileColor).setDepth(5)
-      : null;
-    const core = this.add.circle(x, y, 7, 0x172322).setStrokeStyle(2, spec.projectileColor).setDepth(6);
-    const typeLabel = this.add.text(x, y - 27, this.selectedTowerKind === 'cannon' ? 'C' : this.selectedTowerKind === 'rapid' ? 'R' : 'F', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#f4f5dd',
+    const sprite = this.add.image(x, y, `tower-${this.selectedTowerKind}`)
+      .setOrigin(0.4, 0.5)
+      .setDepth(5)
+      .setInteractive({ useHandCursor: true });
+    const levelLabel = this.add.text(x, y + 22, '1', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#f4f5dd',
     }).setOrigin(0.5).setDepth(6);
     const tower: Tower = {
       x,
@@ -1020,9 +1004,11 @@ export class DefenseScene extends Phaser.Scene {
       kind: this.selectedTowerKind,
       level: 1,
       cooldown: GAMEPLAY_CONFIG.tower.initialCooldown,
-      base, barrel, secondBarrel, core, typeLabel, rangeRing,
+      sprite,
+      levelLabel,
+      rangeRing,
     };
-    base.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
+    sprite.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
       event.stopPropagation();
       this.selectTower(tower);
     });
@@ -1062,18 +1048,11 @@ export class DefenseScene extends Phaser.Scene {
     this.coins -= cost;
     tower.level += 1;
     const spec = GAMEPLAY_CONFIG.tower[tower.kind];
-    tower.base.setFillStyle(
-      tower.level === GAMEPLAY_CONFIG.tower.upgradeMaximumLevel
-        ? Phaser.Display.Color.ValueToColor(spec.color).darken(GAMEPLAY_CONFIG.tower.maximumLevelDarken).color
-        : spec.color,
-    );
-    tower.base.setRadius(
-      GAMEPLAY_CONFIG.tower.baseRadius + tower.level * GAMEPLAY_CONFIG.tower.baseRadiusPerLevel,
-    );
-    tower.core.setRadius(
-      GAMEPLAY_CONFIG.tower.coreRadius + tower.level * GAMEPLAY_CONFIG.tower.coreRadiusPerLevel,
-    );
-    tower.typeLabel.setText(`${tower.kind === 'cannon' ? 'C' : tower.kind === 'rapid' ? 'R' : 'F'}${tower.level}`);
+    tower.sprite.setScale(1 + (tower.level - 1) * 0.08);
+    if (tower.level === GAMEPLAY_CONFIG.tower.upgradeMaximumLevel) {
+      tower.sprite.setTint(Phaser.Display.Color.ValueToColor(spec.color).darken(GAMEPLAY_CONFIG.tower.maximumLevelDarken).color);
+    }
+    tower.levelLabel.setText(String(tower.level));
     const rangeGain = tower.kind === 'rapid'
       ? GAMEPLAY_CONFIG.tower.rapidRangePerLevel
       : GAMEPLAY_CONFIG.tower.otherRangePerLevel;
