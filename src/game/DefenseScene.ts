@@ -185,17 +185,11 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private drawMap(): void {
-    this.cameras.main.setBackgroundColor('#0c1419');
-    const field = this.add.renderTexture(0, 0, GAMEPLAY_CONFIG.scene.width, GAMEPLAY_CONFIG.scene.height)
-      .setOrigin(0, 0)
-      .setDepth(0);
-    const tile = 32;
-    for (let y = tile / 2; y < GAMEPLAY_CONFIG.scene.height; y += tile) {
-      for (let x = tile / 2; x < GAMEPLAY_CONFIG.scene.width; x += tile) {
-        field.draw('tile-grass', x, y);
-      }
-    }
-    this.stampPath(field);
+    this.cameras.main.setBackgroundColor('#1d5a38');
+    const width = GAMEPLAY_CONFIG.scene.width;
+    const height = GAMEPLAY_CONFIG.scene.height;
+    this.add.tileSprite(width / 2, height / 2, width, height, 'tile-grass').setDepth(0);
+    this.stampPath();
 
     this.add.text(22, GAMEPLAY_CONFIG.hud.topHeight + 14, 'МАРШРУТ ВРАГА', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#d5e7c8',
@@ -222,7 +216,7 @@ export class DefenseScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(5);
   }
 
-  private stampPath(field: Phaser.GameObjects.RenderTexture): void {
+  private stampPath(): void {
     for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
       const start = GAMEPLAY_CONFIG.route[index];
       const end = GAMEPLAY_CONFIG.route[index + 1];
@@ -238,7 +232,7 @@ export class DefenseScene extends Phaser.Scene {
         const x = start.x + dx * t;
         const y = start.y + dy * t;
         for (const offset of [-18, 0, 18]) {
-          field.draw('tile-path', x + nx * offset, y + ny * offset);
+          this.add.image(x + nx * offset, y + ny * offset, 'tile-path').setDepth(1);
         }
       }
     }
