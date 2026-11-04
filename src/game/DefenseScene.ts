@@ -75,6 +75,7 @@ interface Keys {
   one: Phaser.Input.Keyboard.Key;
   two: Phaser.Input.Keyboard.Key;
   three: Phaser.Input.Keyboard.Key;
+  b: Phaser.Input.Keyboard.Key;
 }
 
 export class DefenseScene extends Phaser.Scene {
@@ -100,6 +101,9 @@ export class DefenseScene extends Phaser.Scene {
   private selectedTowerKind: TowerKind = 'cannon';
   private selectedWeapon: WeaponKind = 'pulse';
   private towerTypeButtons: Phaser.GameObjects.Rectangle[] = [];
+  private buildSheet!: Phaser.GameObjects.Container;
+  private buildButton!: Phaser.GameObjects.Rectangle;
+  private buildSheetOpen = false;
   private weaponButtons: Phaser.GameObjects.Rectangle[] = [];
 
   private wave = 0;
@@ -266,13 +270,15 @@ export class DefenseScene extends Phaser.Scene {
     }).setDepth(12);
 
     this.weaponNameText = this.add.text(0, 0, '').setVisible(false);
-    this.addWeaponButton('pulse', 150, actionY);
-    this.addWeaponButton('rail', 268, actionY);
-    this.addWeaponButton('scatter', 386, actionY);
-    this.addTowerTypeButton('cannon', 560, actionY);
-    this.addTowerTypeButton('rapid', 668, actionY);
-    this.addTowerTypeButton('cryo', 776, actionY);
-    this.fireCooldownText = this.add.text(700, dockTop + 8, 'ПРОБЕЛ: ОГОНЬ  ·  Q: ЭМИ', this.hudStyle(10, '#b6c9bc')).setDepth(12);
+    this.addWeaponButton('pulse', 168, actionY);
+    this.addWeaponButton('rail', 292, actionY);
+    this.addWeaponButton('scatter', 416, actionY);
+    this.buildButton = this.add.rectangle(560, actionY, 124, 32, 0x263b38)
+      .setStrokeStyle(1, 0x8fbf9a).setInteractive({ useHandCursor: true }).setDepth(12);
+    this.buildButton.on('pointerdown', () => this.toggleBuildSheet());
+    this.add.text(560, actionY, 'B СТРОИТЬ', this.hudStyle(10, '#d9e8dc')).setOrigin(0.5).setDepth(13);
+    this.fireCooldownText = this.add.text(680, dockTop + 8, 'ПРОБЕЛ: ОГОНЬ  ·  Q: ЭМИ', this.hudStyle(10, '#b6c9bc')).setDepth(12);
+    this.createBuildSheet(width, height);
 
     this.upgradeButton = this.add.rectangle(888, actionY, 120, 32, 0x263b38)
       .setStrokeStyle(1, 0x637d70).setInteractive({ useHandCursor: true }).setDepth(12);
@@ -281,13 +287,52 @@ export class DefenseScene extends Phaser.Scene {
       .setOrigin(0.5).setDepth(13);
   }
 
+  private createBuildSheet(width: number, height: number): void {
+    const sheetHeight = GAMEPLAY_CONFIG.hud.buildSheetHeight;
+    this.buildSheet = this.add.container(0, height).setDepth(15);
+    const panel = this.add.rectangle(width / 2, sheetHeight / 2, width, sheetHeight, 0x182428)
+      .setStrokeStyle(1, 0x405450)
+      .setInteractive();
+    const title = this.add.text(24, sheetHeight / 2, 'СТРОИТЕЛЬСТВО', this.hudStyle(11, '#d5e7c8')).setOrigin(0, 0.5);
+    this.buildSheet.add([panel, title]);
+    this.addTowerTypeButton('cannon', 280, sheetHeight / 2);
+    this.addTowerTypeButton('rapid', 430, sheetHeight / 2);
+    this.addTowerTypeButton('cryo', 580, sheetHeight / 2);
+  }
+
   private addTowerTypeButton(kind: TowerKind, x: number, y: number): void {
     const spec = GAMEPLAY_CONFIG.tower[kind];
-    const button = this.add.rectangle(x, y, 100, 32, 0x263b38)
-      .setStrokeStyle(1, spec.color).setInteractive({ useHandCursor: true }).setDepth(12);
+    const button = this.add.rectangle(x, y, 136, 34, 0x263b38)
+      .setStrokeStyle(2, spec.color)
+      .setInteractive({ useHandCursor: true });
     button.on('pointerdown', () => this.selectTowerKind(kind));
-    this.add.text(x, y, `${spec.shortLabel} ${spec.cost}`, this.hudStyle(8, '#d9e8dc')).setOrigin(0.5).setDepth(13);
+    const label = this.add.text(x, y, `${spec.shortLabel} · ${spec.cost}`, this.hudStyle(11, '#d9e8dc')).setOrigin(0.5);
+    this.buildSheet.add([button, label]);
     this.towerTypeButtons.push(button);
+  }
+
+  private toggleBuildSheet(): void {
+    if (this.mode !== 'playing') return;
+    this.setBuildSheet(!this.buildSheetOpen, true);
+  }
+
+  private setBuildSheet(open: boolean, animate: boolean): void {
+    this.buildSheetOpen = open;
+    const openY = GAMEPLAY_CONFIG.scene.height
+      - GAMEPLAY_CONFIG.hud.dockHeight
+      - GAMEPLAY_CONFIG.hud.buildSheetHeight;
+    const y = open ? openY : GAMEPLAY_CONFIG.scene.height;
+    this.tweens.killTweensOf(this.buildSheet);
+    if (!animate) {
+      this.buildSheet.y = y;
+      return;
+    }
+    this.tweens.add({
+      targets: this.buildSheet,
+      y,
+      duration: 160,
+      ease: 'Quad.easeOut',
+    });
   }
 
   private addWeaponButton(kind: WeaponKind, x: number, y: number): void {
@@ -332,6 +377,7 @@ export class DefenseScene extends Phaser.Scene {
       one: Phaser.Input.Keyboard.KeyCodes.ONE,
       two: Phaser.Input.Keyboard.KeyCodes.TWO,
       three: Phaser.Input.Keyboard.KeyCodes.THREE,
+      b: Phaser.Input.Keyboard.KeyCodes.B,
     }) as Keys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
@@ -394,7 +440,7 @@ export class DefenseScene extends Phaser.Scene {
         align: 'center', lineSpacing: 9,
       }).setOrigin(0.5);
     const controls = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 350,
-      'WASD / стрелки — движение   •   Пробел — огонь   •   Q — ЭМИ   •   P / Esc — пауза', {
+      'WASD — движение   •   1 2 3 — оружие   •   Пробел — огонь   •   Q — ЭМИ   •   B — стройка   •   P — пауза', {
         fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#91aaa0',
       }).setOrigin(0.5);
     this.modal.add([overlay, panel, title, pitch, controls]);
@@ -449,6 +495,7 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTowerKind = 'cannon';
     this.selectedWeapon = 'pulse';
     this.selectedTower = null;
+    this.setBuildSheet(false, false);
     this.refreshTowerTypeButtons();
     this.refreshWeaponButtons();
     this.player.setPosition(this.playerX, this.playerY).setVisible(true).clearTint().setRotation(0);
@@ -504,6 +551,7 @@ export class DefenseScene extends Phaser.Scene {
       this.usePulse();
       this.pulseButtonHeld = false;
     }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.b)) this.toggleBuildSheet();
     if (Phaser.Input.Keyboard.JustDown(this.keys.one)) this.selectWeapon('pulse');
     if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.selectWeapon('rail');
     if (Phaser.Input.Keyboard.JustDown(this.keys.three)) this.selectWeapon('scatter');
@@ -1017,6 +1065,11 @@ export class DefenseScene extends Phaser.Scene {
     if (!slot) return;
     if (slot.tower) {
       this.selectTower(slot.tower);
+      this.setBuildSheet(false, true);
+      return;
+    }
+    if (!this.buildSheetOpen) {
+      this.statusText.setText('НАЖМИ B, ЧТОБЫ ОТКРЫТЬ СТРОИТЕЛЬСТВО');
       return;
     }
     const spec = GAMEPLAY_CONFIG.tower[this.selectedTowerKind];
@@ -1056,6 +1109,7 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTower = tower;
     this.showTowerRange(tower);
     this.statusText.setText(`${spec.name.toUpperCase()} УСТАНОВЛЕНА · УР. 1`);
+    this.setBuildSheet(false, true);
     this.refreshHud();
   }
 

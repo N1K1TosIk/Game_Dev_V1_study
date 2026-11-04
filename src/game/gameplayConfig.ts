@@ -201,6 +201,7 @@ export const GAMEPLAY_CONFIG = {
   hud: {
     topHeight: 40,
     dockHeight: 78,
+    buildSheetHeight: 54,
   },
   ui: {
     unselectedButtonAlpha: 0.82,
