@@ -130,7 +130,9 @@ export class DefenseScene extends Phaser.Scene {
   private sellButton!: Phaser.GameObjects.Rectangle;
   private sellLabel!: Phaser.GameObjects.Text;
   private fireCooldownText!: Phaser.GameObjects.Text;
-  private weaponNameText!: Phaser.GameObjects.Text;
+  private fireKeyButton!: Phaser.GameObjects.Rectangle;
+  private pulseKeyButton!: Phaser.GameObjects.Rectangle;
+  private pulseKeyLabel!: Phaser.GameObjects.Text;
   private bestWave = 0;
 
   constructor() {
@@ -268,11 +270,11 @@ export class DefenseScene extends Phaser.Scene {
 
     this.add.rectangle(width / 2, dockTop + dock / 2, width, dock, 0x111d21).setDepth(10);
     this.add.rectangle(width / 2, dockTop, width, 2, 0x405450).setDepth(11);
-    this.statusText = this.add.text(16, dockTop + 8, 'Построй башню на свободной площадке', {
+    this.statusText = this.add.text(16, dockTop + 8, 'Нажми B, чтобы открыть строительство', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#c5d6cc',
+      wordWrap: { width: 600 },
     }).setDepth(12);
 
-    this.weaponNameText = this.add.text(0, 0, '').setVisible(false);
     this.addWeaponButton('pulse', 168, actionY);
     this.addWeaponButton('rail', 292, actionY);
     this.addWeaponButton('scatter', 416, actionY);
@@ -280,7 +282,12 @@ export class DefenseScene extends Phaser.Scene {
       .setStrokeStyle(1, 0x8fbf9a).setInteractive({ useHandCursor: true }).setDepth(12);
     this.buildButton.on('pointerdown', () => this.toggleBuildSheet());
     this.add.text(560, actionY, 'B СТРОИТЬ', this.hudStyle(10, '#d9e8dc')).setOrigin(0.5).setDepth(13);
-    this.fireCooldownText = this.add.text(680, dockTop + 8, 'ПРОБЕЛ: ОГОНЬ  ·  Q: ЭМИ', this.hudStyle(10, '#b6c9bc')).setDepth(12);
+    this.fireKeyButton = this.add.rectangle(700, dockTop + 18, 92, 24, 0x263b38)
+      .setStrokeStyle(1, 0xf1b57d).setDepth(12);
+    this.fireCooldownText = this.add.text(700, dockTop + 18, 'SPACE', this.hudStyle(10, '#fff0d9')).setOrigin(0.5).setDepth(13);
+    this.pulseKeyButton = this.add.rectangle(804, dockTop + 18, 64, 24, 0x263b38)
+      .setStrokeStyle(1, 0x7de0ca).setDepth(12);
+    this.pulseKeyLabel = this.add.text(804, dockTop + 18, 'Q', this.hudStyle(12, '#d5fff3')).setOrigin(0.5).setDepth(13);
     this.createBuildSheet(width, height);
 
     this.upgradeButton = this.add.rectangle(760, actionY, 116, 32, 0x263b38)
@@ -293,6 +300,7 @@ export class DefenseScene extends Phaser.Scene {
     this.sellButton.on('pointerdown', () => this.sellSelectedTower());
     this.sellLabel = this.add.text(888, actionY, 'ПРОДАТЬ', this.hudStyle(9, '#f0c2b6'))
       .setOrigin(0.5).setDepth(13);
+    this.refreshHotkeyHighlights();
   }
 
   private createBuildSheet(width: number, height: number): void {
@@ -684,13 +692,33 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private refreshWeaponButtons(): void {
+    const fireReady = this.playerFireCooldown <= 0;
     this.weaponButtons.forEach((button, index) => {
       const kind = (['pulse', 'rail', 'scatter'] as const)[index];
       if (!kind) return;
       const selected = kind === this.selectedWeapon;
       button.setFillStyle(selected ? 0x397960 : 0x263b38);
-      button.setAlpha(selected ? 1 : GAMEPLAY_CONFIG.ui.unselectedButtonAlpha);
+      button.setAlpha(selected
+        ? (fireReady ? 1 : 0.45)
+        : GAMEPLAY_CONFIG.ui.unselectedButtonAlpha);
+      button.setStrokeStyle(selected && fireReady ? 2 : 1, selected ? 0xf3cf79 : 0x759182);
     });
+  }
+
+  private refreshHotkeyHighlights(): void {
+    const playing = this.mode === 'playing';
+    const fireReady = playing && this.playerFireCooldown <= 0;
+    const pulseReady = playing && this.pulseCooldown <= 0;
+    this.fireKeyButton.setFillStyle(fireReady ? 0x8b593e : 0x263b38);
+    this.fireKeyButton.setAlpha(fireReady ? 1 : 0.45);
+    this.fireCooldownText.setText(this.playerFireCooldown > 0 ? this.playerFireCooldown.toFixed(1) : 'SPACE');
+    this.pulseKeyButton.setFillStyle(pulseReady ? 0x2f6d66 : 0x263b38);
+    this.pulseKeyButton.setAlpha(pulseReady ? 1 : 0.45);
+    this.pulseKeyLabel.setText(this.pulseCooldown > 0 ? this.pulseCooldown.toFixed(1) : 'Q');
+    this.buildButton.setFillStyle(this.buildSheetOpen ? 0x2f6a52 : 0x263b38);
+    this.buildButton.setAlpha(playing ? 1 : 0.5);
+    this.buildButton.setStrokeStyle(2, this.buildSheetOpen ? 0xf3cf79 : 0x8fbf9a);
+    this.refreshWeaponButtons();
   }
 
   private usePulse(): void {
@@ -1312,13 +1340,8 @@ export class DefenseScene extends Phaser.Scene {
     this.coinsText.setText(`МОНЕТЫ ${this.coins}`);
     this.playerText.setText(`ГЕРОЙ ${this.playerHealth}`);
     this.phaseText.setText(this.phase === 2 ? 'ФАЗА 2' : 'ФАЗА 1');
-    const weaponNames: Record<WeaponKind, string> = {
-      pulse: 'КАРАБИН', rail: 'РЕЛЬСА', scatter: 'ДРОБОВИК',
-    };
-    const pulseStatus = this.pulseCooldown > 0 ? `ЭМИ: ${this.pulseCooldown.toFixed(1)}с` : 'ЭМИ: ГОТОВ';
-    this.weaponNameText.setText(`ОРУЖИЕ: ${weaponNames[this.selectedWeapon]}`);
-    this.fireCooldownText.setText(`ПРОБЕЛ: ОГОНЬ  ·  Q: ${pulseStatus}`);
     this.refreshUpgradeButton();
+    this.refreshHotkeyHighlights();
   }
 
   private refreshHud(): void {
