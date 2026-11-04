@@ -201,6 +201,7 @@ export const GAMEPLAY_CONFIG = {
     homingTurnRate: 2.8,
     homingTurnRatePerLevel: 0.55,
     homingProjectileLifetime: 2.2,
+    muzzleFlashMs: 80,
     upgradeMaximumLevel: 3,
   } satisfies Record<TowerKind, TowerSpec> & Record<string, number | string | TowerSpec>,
   routeGen: {

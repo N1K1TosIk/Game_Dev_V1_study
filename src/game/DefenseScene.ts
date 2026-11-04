@@ -51,7 +51,7 @@ interface BuildSlot {
 }
 
 interface Projectile {
-  body: Phaser.GameObjects.Arc;
+  body: Phaser.GameObjects.Arc | Phaser.GameObjects.Image;
   vx: number;
   vy: number;
   damage: number;
@@ -165,7 +165,7 @@ export class DefenseScene extends Phaser.Scene {
       'hero', 'hero-cape', 'base',
       'enemy-scout', 'enemy-scout-step', 'enemy-raider', 'enemy-raider-step',
       'enemy-brute', 'enemy-brute-step', 'enemy-boss', 'enemy-boss-step', 'enemy-flyer', 'enemy-flyer-flap',
-      'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing',
+      'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing', 'projectile-homing',
     ]) {
       this.load.image(key, `assets/${key}.png`);
     }
@@ -1088,6 +1088,7 @@ export class DefenseScene extends Phaser.Scene {
       const projectileSpeed = tower.kind === 'rapid'
         ? GAMEPLAY_CONFIG.tower.rapidProjectileSpeed
         : GAMEPLAY_CONFIG.tower.projectileSpeed;
+      this.flashMuzzle(tower.x, tower.y, target.body.x, target.body.y, spec.projectileColor);
       this.fireProjectile(tower.x, tower.y, target, damage, projectileSpeed, 'tower', effects);
       tower.cooldown = fireRate;
     });
@@ -1116,9 +1117,10 @@ export class DefenseScene extends Phaser.Scene {
     const radius = source === 'player'
       ? GAMEPLAY_CONFIG.projectile.playerRadius
       : GAMEPLAY_CONFIG.projectile.towerRadius;
-    const body = this.add.circle(x, y, radius, color)
-      .setDepth(6);
     const turnRate = options.turnRate ?? 0;
+    const body = turnRate > 0
+      ? this.add.image(x, y, 'projectile-homing').setDepth(6).setRotation(angle)
+      : this.add.circle(x, y, radius, color).setDepth(6);
     this.projectiles.push({
       body,
       vx: Math.cos(angle) * speed,
@@ -1145,6 +1147,24 @@ export class DefenseScene extends Phaser.Scene {
     const next = this.rotateToward(current, desired, projectile.turnRate * seconds);
     projectile.vx = Math.cos(next) * projectile.speed;
     projectile.vy = Math.sin(next) * projectile.speed;
+    this.aimHomingSprite(projectile);
+  }
+
+  private aimHomingSprite(projectile: Projectile): void {
+    if (!(projectile.body instanceof Phaser.GameObjects.Image)) return;
+    projectile.body.setRotation(Math.atan2(projectile.vy, projectile.vx));
+  }
+
+  private flashMuzzle(x: number, y: number, targetX: number, targetY: number, color: number): void {
+    const angle = Phaser.Math.Angle.Between(x, y, targetX, targetY);
+    const flash = this.add.circle(
+      x + Math.cos(angle) * 20,
+      y + Math.sin(angle) * 20,
+      5,
+      color,
+      0.9,
+    ).setDepth(6);
+    this.time.delayedCall(GAMEPLAY_CONFIG.tower.muzzleFlashMs, () => flash.destroy());
   }
 
   private rotateToward(current: number, desired: number, maxStep: number): number {
@@ -1158,6 +1178,7 @@ export class DefenseScene extends Phaser.Scene {
       const projectile = this.projectiles[index];
       if (!projectile) continue;
       this.steerProjectile(projectile, seconds);
+      this.aimHomingSprite(projectile);
       projectile.body.x += projectile.vx * seconds;
       projectile.body.y += projectile.vy * seconds;
       projectile.lifetime -= seconds;

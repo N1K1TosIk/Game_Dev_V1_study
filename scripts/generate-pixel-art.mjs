@@ -245,6 +245,12 @@ const sprites = {
     rect(30, 15, 6, 3, 0xfff6c4);
     rect(30, 22, 6, 3, 0xfff6c4);
   }),
+  'projectile-homing.png': sized(16, 16, ({ rect }) => {
+    rect(1, 6, 9, 4, 0xf3e27a);
+    rect(9, 5, 5, 6, 0xfff6c4);
+    rect(4, 4, 4, 2, 0xc4a24a);
+    rect(4, 10, 4, 2, 0xc4a24a);
+  }),
 };
 
 for (const [name, art] of Object.entries(sprites)) {
