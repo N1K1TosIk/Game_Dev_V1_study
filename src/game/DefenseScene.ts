@@ -141,6 +141,12 @@ export class DefenseScene extends Phaser.Scene {
   private upgradeLabel!: Phaser.GameObjects.Text;
   private sellButton!: Phaser.GameObjects.Rectangle;
   private sellLabel!: Phaser.GameObjects.Text;
+  private shopPanel!: Phaser.GameObjects.Container;
+  private shopOpen = false;
+  private heroSkinOwned = false;
+  private charmActive = false;
+  private shopSkinLabel!: Phaser.GameObjects.Text;
+  private shopCharmLabel!: Phaser.GameObjects.Text;
   private fireCooldownText!: Phaser.GameObjects.Text;
   private fireKeyButton!: Phaser.GameObjects.Rectangle;
   private pulseKeyButton!: Phaser.GameObjects.Rectangle;
@@ -318,8 +324,12 @@ export class DefenseScene extends Phaser.Scene {
     this.add.rectangle(width / 2, dockTop, width, 2, 0x405450).setDepth(11);
     this.statusText = this.add.text(16, dockTop + 8, 'Нажми B, чтобы открыть строительство', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#c5d6cc',
-      wordWrap: { width: 600 },
+      wordWrap: { width: 500 },
     }).setDepth(12);
+    const shopButton = this.add.rectangle(598, dockTop + 18, 96, 24, 0x3a3420)
+      .setStrokeStyle(1, 0xf3cf79).setInteractive({ useHandCursor: true }).setDepth(12);
+    shopButton.on('pointerdown', () => this.toggleShop());
+    this.add.text(598, dockTop + 18, 'ЛАВКА', this.hudStyle(10, '#f3cf79')).setOrigin(0.5).setDepth(13);
 
     this.addWeaponButton('pulse', 168, actionY);
     this.addWeaponButton('rail', 292, actionY);
@@ -335,6 +345,7 @@ export class DefenseScene extends Phaser.Scene {
       .setStrokeStyle(1, 0x7de0ca).setDepth(12);
     this.pulseKeyLabel = this.add.text(804, dockTop + 18, 'Q', this.hudStyle(12, '#d5fff3')).setOrigin(0.5).setDepth(13);
     this.createBuildSheet(width, height);
+    this.createShop(width, height);
 
     this.upgradeButton = this.add.rectangle(760, actionY, 116, 32, 0x263b38)
       .setStrokeStyle(1, 0x637d70).setInteractive({ useHandCursor: true }).setDepth(12);
@@ -379,7 +390,95 @@ export class DefenseScene extends Phaser.Scene {
 
   private toggleBuildSheet(): void {
     if (this.mode !== 'playing') return;
+    if (!this.buildSheetOpen) this.setShop(false);
     this.setBuildSheet(!this.buildSheetOpen, true);
+  }
+
+  private createShop(width: number, height: number): void {
+    const panelHeight = GAMEPLAY_CONFIG.shop.panelHeight;
+    this.shopPanel = this.add.container(0, height).setDepth(16);
+    const panel = this.add.rectangle(width / 2, panelHeight / 2, width, panelHeight, 0x241e12)
+      .setStrokeStyle(1, 0x8a7040)
+      .setInteractive();
+    const title = this.add.text(24, panelHeight / 2, 'ЛАВКА', this.hudStyle(11, '#f3cf79')).setOrigin(0, 0.5);
+    this.shopPanel.add([panel, title]);
+    this.shopSkinLabel = this.addShopOffer(280, panelHeight / 2, () => this.buyHeroSkin());
+    this.shopCharmLabel = this.addShopOffer(620, panelHeight / 2, () => this.buyCharm());
+    this.refreshShopLabels();
+  }
+
+  private addShopOffer(x: number, y: number, onClick: () => void): Phaser.GameObjects.Text {
+    const button = this.add.rectangle(x, y, 250, 34, 0x3a3420)
+      .setStrokeStyle(2, 0xf3cf79)
+      .setInteractive({ useHandCursor: true });
+    button.on('pointerdown', onClick);
+    const label = this.add.text(x, y, '', this.hudStyle(11, '#f8e7b0')).setOrigin(0.5);
+    this.shopPanel.add([button, label]);
+    return label;
+  }
+
+  private toggleShop(): void {
+    if (this.mode !== 'playing') return;
+    if (!this.shopOpen) this.setBuildSheet(false, true);
+    this.setShop(!this.shopOpen);
+  }
+
+  private setShop(open: boolean): void {
+    this.shopOpen = open;
+    const openY = GAMEPLAY_CONFIG.scene.height
+      - GAMEPLAY_CONFIG.hud.dockHeight
+      - GAMEPLAY_CONFIG.shop.panelHeight;
+    const y = open ? openY : GAMEPLAY_CONFIG.scene.height;
+    this.tweens.killTweensOf(this.shopPanel);
+    this.tweens.add({
+      targets: this.shopPanel,
+      y,
+      duration: 160,
+      ease: 'Quad.easeOut',
+    });
+  }
+
+  private buyHeroSkin(): void {
+    if (this.heroSkinOwned) {
+      this.statusText.setText('ПЛАЩ УЖЕ КУПЛЕН');
+      return;
+    }
+    const price = GAMEPLAY_CONFIG.shop.heroSkin.price;
+    if (!this.spendCoins(price)) return;
+    this.heroSkinOwned = true;
+    this.statusText.setText('ПЛАЩ КУПЛЕН');
+    this.refreshShopLabels();
+    this.refreshHud();
+  }
+
+  private buyCharm(): void {
+    if (this.charmActive) {
+      this.statusText.setText('АМУЛЕТ УЖЕ ДЕЙСТВУЕТ В ЭТОМ ЗАБЕГЕ');
+      return;
+    }
+    const price = GAMEPLAY_CONFIG.shop.charm.price;
+    if (!this.spendCoins(price)) return;
+    this.charmActive = true;
+    this.statusText.setText('АМУЛЕТ КУПЛЕН НА ЭТОТ ЗАБЕГ');
+    this.refreshShopLabels();
+    this.refreshHud();
+  }
+
+  private spendCoins(price: number): boolean {
+    if (this.mode !== 'playing') return false;
+    if (this.coins < price) {
+      this.statusText.setText(`НУЖНО ${price} МОНЕТ`);
+      return false;
+    }
+    this.coins -= price;
+    return true;
+  }
+
+  private refreshShopLabels(): void {
+    const skin = GAMEPLAY_CONFIG.shop.heroSkin;
+    const charm = GAMEPLAY_CONFIG.shop.charm;
+    this.shopSkinLabel.setText(this.heroSkinOwned ? `${skin.name} · КУПЛЕНО` : `${skin.name} · ${skin.price}`);
+    this.shopCharmLabel.setText(this.charmActive ? `${charm.name} · АКТИВЕН` : `${charm.name} · ${charm.price}`);
   }
 
   private setBuildSheet(open: boolean, animate: boolean): void {
@@ -563,6 +662,9 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedWeapon = 'pulse';
     this.selectedTower = null;
     this.setBuildSheet(false, false);
+    this.setShop(false);
+    this.charmActive = false;
+    this.refreshShopLabels();
     this.refreshTowerTypeButtons();
     this.refreshWeaponButtons();
     this.player.setPosition(this.playerX, this.playerY).setVisible(true).clearTint().setRotation(0);
@@ -1115,6 +1217,7 @@ export class DefenseScene extends Phaser.Scene {
       this.beginPhaseTwoTransition();
       return;
     }
+    if (this.waveDelay === 0) this.statusText.setText('МЕЖДУ ВОЛНАМИ МОЖНО ОТКРЫТЬ ЛАВКУ');
     this.waveDelay += seconds;
     if (this.waveDelay >= GAMEPLAY_CONFIG.wave.interWaveDelay) this.launchWave();
   }
@@ -1360,6 +1463,8 @@ export class DefenseScene extends Phaser.Scene {
 
   private togglePause(): void {
     if (this.mode === 'playing') {
+      this.setShop(false);
+      this.setBuildSheet(false, false);
       this.mode = 'paused';
       this.modal = this.add.container(0, 0).setDepth(100);
       const overlay = this.add.rectangle(
@@ -1407,6 +1512,7 @@ export class DefenseScene extends Phaser.Scene {
 
   private endGame(reason: string): void {
     if (this.mode === 'gameover') return;
+    this.setShop(false);
     this.mode = 'gameover';
     this.pointerTarget = null;
     const newRecord = this.wave > this.bestWave;

@@ -76,6 +76,11 @@ export const GAMEPLAY_CONFIG = {
     upgradeCostPerLevel: 20,
     sellRefundRatio: 0.7,
   },
+  shop: {
+    panelHeight: 58,
+    heroSkin: { id: 'cape', price: 45, name: 'Плащ героя' },
+    charm: { id: 'damage', price: 30, name: 'Боевой амулет', damageMultiplier: 1.5 },
+  },
   pulse: {
     radius: 128,
     cooldown: 8,
