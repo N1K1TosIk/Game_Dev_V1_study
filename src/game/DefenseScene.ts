@@ -161,7 +161,7 @@ export class DefenseScene extends Phaser.Scene {
 
   preload(): void {
     for (const key of [
-      'tile-grass', 'tile-path', 'tile-slot',
+      'tile-grass', 'tile-path', 'tile-path-edge', 'tile-slot',
       'hero', 'hero-cape', 'base',
       'enemy-scout', 'enemy-scout-step', 'enemy-raider', 'enemy-raider-step',
       'enemy-brute', 'enemy-brute-step', 'enemy-boss', 'enemy-boss-step', 'enemy-flyer', 'enemy-flyer-flap',
@@ -296,7 +296,8 @@ export class DefenseScene extends Phaser.Scene {
         const x = start.x + dx * t;
         const y = start.y + dy * t;
         for (const offset of [-18, 0, 18]) {
-          this.pathTiles.push(this.add.image(x + nx * offset, y + ny * offset, 'tile-path').setDepth(1));
+          const texture = offset === 0 ? 'tile-path' : 'tile-path-edge';
+          this.pathTiles.push(this.add.image(x + nx * offset, y + ny * offset, texture).setDepth(1));
         }
       }
     }

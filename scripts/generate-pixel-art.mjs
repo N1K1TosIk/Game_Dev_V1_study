@@ -94,6 +94,13 @@ const grass = sized(32, 32, ({ rect, set }) => {
   });
 });
 
+const pathEdge = sized(32, 32, ({ rect }) => {
+  rect(0, 0, 32, 32, 0x6e5844);
+  rect(0, 0, 32, 5, 0x8a7058);
+  rect(0, 27, 32, 5, 0x8a7058);
+  rect(0, 13, 32, 6, 0x4a382c);
+});
+
 const path = sized(32, 32, ({ rect, set }) => {
   rect(0, 0, 32, 32, 0xc4a888);
   rect(0, 0, 32, 2, 0x8a7058);
@@ -192,6 +199,7 @@ function boss(step) {
 const sprites = {
   'tile-grass.png': grass,
   'tile-path.png': path,
+  'tile-path-edge.png': pathEdge,
   'tile-slot.png': slot,
   'hero.png': sized(32, 32, hero),
   'hero-cape.png': sized(32, 32, heroCape),
