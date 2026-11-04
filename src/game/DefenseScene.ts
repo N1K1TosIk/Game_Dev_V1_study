@@ -40,7 +40,7 @@ interface Tower {
 interface BuildSlot {
   x: number;
   y: number;
-  marker: Phaser.GameObjects.Arc;
+  marker: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   tower: Tower | null;
 }
@@ -133,6 +133,12 @@ export class DefenseScene extends Phaser.Scene {
     super('DefenseScene');
   }
 
+  preload(): void {
+    for (const key of ['tile-grass', 'tile-path', 'tile-slot']) {
+      this.load.image(key, `assets/${key}.png`);
+    }
+  }
+
   create(): void {
     this.drawMap();
     this.createHud();
@@ -169,51 +175,25 @@ export class DefenseScene extends Phaser.Scene {
 
   private drawMap(): void {
     this.cameras.main.setBackgroundColor('#0c1419');
-    this.add.rectangle(
-      GAMEPLAY_CONFIG.scene.width / 2,
-      GAMEPLAY_CONFIG.scene.height / 2,
-      GAMEPLAY_CONFIG.scene.width,
-      GAMEPLAY_CONFIG.scene.height,
-      0x101a20,
-    );
+    const field = this.add.renderTexture(0, 0, GAMEPLAY_CONFIG.scene.width, GAMEPLAY_CONFIG.scene.height)
+      .setOrigin(0, 0)
+      .setDepth(0);
+    const tile = 32;
+    for (let y = tile / 2; y < GAMEPLAY_CONFIG.scene.height; y += tile) {
+      for (let x = tile / 2; x < GAMEPLAY_CONFIG.scene.width; x += tile) {
+        field.draw('tile-grass', x, y);
+      }
+    }
+    this.stampPath(field);
 
-    const grid = this.add.graphics();
-    grid.lineStyle(1, 0x1d2c30, 0.7);
-    for (let x = 20; x < GAMEPLAY_CONFIG.scene.width; x += 40) {
-      grid.lineBetween(x, 104, x, GAMEPLAY_CONFIG.scene.height);
-    }
-    for (let y = 120; y < GAMEPLAY_CONFIG.scene.height; y += 40) {
-      grid.lineBetween(0, y, GAMEPLAY_CONFIG.scene.width, y);
-    }
-
-    const road = this.add.graphics();
-    road.lineStyle(52, 0x3a4544, 1);
-    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
-      const start = GAMEPLAY_CONFIG.route[index];
-      const end = GAMEPLAY_CONFIG.route[index + 1];
-      if (start && end) road.lineBetween(start.x, start.y, end.x, end.y);
-    }
-    road.lineStyle(2, 0x9eaa8e, 0.65);
-    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
-      const start = GAMEPLAY_CONFIG.route[index];
-      const end = GAMEPLAY_CONFIG.route[index + 1];
-      if (start && end) road.lineBetween(start.x, start.y, end.x, end.y);
-    }
-
-    this.add.rectangle(
-      GAMEPLAY_CONFIG.scene.width / 2,
-      102,
-      GAMEPLAY_CONFIG.scene.width,
-      4,
-      0x405450,
-    ).setDepth(4);
     this.add.text(22, 113, 'МАРШРУТ ВРАГА', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#879890',
-    });
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#d5e7c8',
+    }).setDepth(2);
 
     this.slots = GAMEPLAY_CONFIG.buildSlots.map(({ x, y }) => {
-      const marker = this.add.circle(x, y, 20, 0x1b292b, 0.96)
-        .setStrokeStyle(2, 0x8da491)
+      const marker = this.add.image(x, y, 'tile-slot')
+        .setDisplaySize(40, 40)
+        .setDepth(2)
         .setInteractive({ useHandCursor: true });
       marker.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
         event.stopPropagation();
@@ -231,6 +211,28 @@ export class DefenseScene extends Phaser.Scene {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#c6e9d4',
     }).setOrigin(0.5).setDepth(5);
     base.setDepth(3);
+  }
+
+  private stampPath(field: Phaser.GameObjects.RenderTexture): void {
+    for (let index = 0; index < GAMEPLAY_CONFIG.route.length - 1; index += 1) {
+      const start = GAMEPLAY_CONFIG.route[index];
+      const end = GAMEPLAY_CONFIG.route[index + 1];
+      if (!start || !end) continue;
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const steps = Math.ceil(length / 16);
+      const nx = -dy / length;
+      const ny = dx / length;
+      for (let step = 0; step <= steps; step += 1) {
+        const t = step / steps;
+        const x = start.x + dx * t;
+        const y = start.y + dy * t;
+        for (const offset of [-18, 0, 18]) {
+          field.draw('tile-path', x + nx * offset, y + ny * offset);
+        }
+      }
+    }
   }
 
   private createHud(): void {
@@ -475,7 +477,7 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTower = null;
     this.slots.forEach((slot) => {
       slot.tower = null;
-      slot.marker.setVisible(true).setFillStyle(0x1b292b);
+      slot.marker.setVisible(true);
       slot.label.setVisible(true);
     });
     this.pulseEffect?.destroy();
