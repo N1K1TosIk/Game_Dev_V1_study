@@ -9,6 +9,7 @@ export function createGame(parent: string): Phaser.Game {
     width: GAMEPLAY_CONFIG.scene.width,
     height: GAMEPLAY_CONFIG.scene.height,
     backgroundColor: '#0c1419',
+    pixelArt: true,
     scene: [DefenseScene],
     scale: {
       mode: Phaser.Scale.FIT,
