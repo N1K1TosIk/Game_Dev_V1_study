@@ -241,6 +241,7 @@ export class DefenseScene extends Phaser.Scene {
       slotCount: gen.slotCount,
       slotOffset: gen.slotOffset,
       corridorHalfWidth: gen.corridorHalfWidth,
+      slotRadius: gen.slotRadius,
     };
   }
 

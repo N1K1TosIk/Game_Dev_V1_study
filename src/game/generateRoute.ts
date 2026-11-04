@@ -13,6 +13,7 @@ export interface RouteRules {
   slotCount: number;
   slotOffset: number;
   corridorHalfWidth: number;
+  slotRadius: number;
 }
 
 export interface GeneratedLayout {
@@ -87,6 +88,7 @@ function placeSlots(route: Point[], base: Point, rules: RouteRules): Point[] {
       slot.x = Math.max(rules.minX, base.x - rules.slotOffset);
     }
     separateFromEarlier(slot, slots, rules);
+    pushOffRoad(slot, route, rules);
     slots.push(slot);
   }
   return slots;
@@ -104,8 +106,43 @@ function offsetFromRoad(anchor: Anchor, side: number, rules: RouteRules, route: 
   return clampPoint(placed(rules.slotOffset + rules.corridorHalfWidth, side), rules);
 }
 
+function roadClearance(rules: RouteRules): number {
+  return rules.corridorHalfWidth + rules.slotRadius;
+}
+
 function clearOfRoad(point: Point, route: Point[], rules: RouteRules): boolean {
-  return distanceToRoute(point, route) >= rules.corridorHalfWidth;
+  return distanceToRoute(point, route) >= roadClearance(rules);
+}
+
+function pushOffRoad(slot: Point, route: Point[], rules: RouteRules): void {
+  const clearance = roadClearance(rules);
+  const directions = [
+    { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+    { x: 1, y: 1 }, { x: -1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: -1 },
+  ];
+  for (let pass = 0; pass < 2; pass += 1) {
+    const gap = distanceToRoute(slot, route);
+    if (gap >= clearance) return;
+    let bestX = slot.x;
+    let bestY = slot.y;
+    let bestGap = gap;
+    directions.forEach((direction) => {
+      const length = Math.hypot(direction.x, direction.y) || 1;
+      const push = clearance + 36;
+      const next = clampPoint({
+        x: slot.x + (direction.x / length) * push,
+        y: slot.y + (direction.y / length) * push,
+      }, rules);
+      const nextGap = distanceToRoute(next, route);
+      if (nextGap > bestGap) {
+        bestGap = nextGap;
+        bestX = next.x;
+        bestY = next.y;
+      }
+    });
+    slot.x = bestX;
+    slot.y = bestY;
+  }
 }
 
 function separateFromEarlier(slot: Point, earlier: Point[], rules: RouteRules): void {

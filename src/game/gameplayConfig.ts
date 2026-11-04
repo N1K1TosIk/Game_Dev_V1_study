@@ -208,6 +208,7 @@ export const GAMEPLAY_CONFIG = {
     turnCount: 4,
     hudPadding: 56,
     corridorHalfWidth: 34,
+    slotRadius: 22,
     slotCount: 8,
     slotOffset: 64,
     slotMargin: 36,
