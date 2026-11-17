@@ -46,6 +46,9 @@ export const GAMEPLAY_CONFIG = {
   },
   player: {
     speed: 230,
+    patrolSpeed: 42,
+    patrolSpan: 88,
+    patrolOffset: 40,
     maxHealth: 100,
     start: { x: 88, y: 340 },
     bounds: { left: 20, right: 22, top: 48, bottom: 36 },
@@ -225,7 +228,7 @@ export const GAMEPLAY_CONFIG = {
   hud: {
     topHeight: 40,
     bottomReserve: 20,
-    livesBar: { x: 188, y: 14, width: 110, height: 12 },
+    livesBar: { x: 214, y: 14, width: 100, height: 12 },
     slotMenu: { width: 168, rowHeight: 36, pad: 8 },
     towerCard: { width: 176, height: 96 },
     waveButton: { x: 848, y: 598, width: 156, height: 34 },

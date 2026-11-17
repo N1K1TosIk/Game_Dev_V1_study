@@ -10,7 +10,6 @@ import {
   type Point,
   type TowerKind,
   type TowerSpec,
-  type WeaponKind,
 } from './gameplayConfig';
 
 type Mode = 'menu' | 'playing' | 'phase-transition' | 'paused' | 'gameover';
@@ -70,23 +69,11 @@ interface Projectile {
 }
 
 interface Keys {
-  left: Phaser.Input.Keyboard.Key;
-  right: Phaser.Input.Keyboard.Key;
-  up: Phaser.Input.Keyboard.Key;
-  down: Phaser.Input.Keyboard.Key;
-  a: Phaser.Input.Keyboard.Key;
-  d: Phaser.Input.Keyboard.Key;
-  w: Phaser.Input.Keyboard.Key;
-  s: Phaser.Input.Keyboard.Key;
-  space: Phaser.Input.Keyboard.Key;
   q: Phaser.Input.Keyboard.Key;
   p: Phaser.Input.Keyboard.Key;
   escape: Phaser.Input.Keyboard.Key;
   enter: Phaser.Input.Keyboard.Key;
   r: Phaser.Input.Keyboard.Key;
-  one: Phaser.Input.Keyboard.Key;
-  two: Phaser.Input.Keyboard.Key;
-  three: Phaser.Input.Keyboard.Key;
 }
 
 export class DefenseScene extends Phaser.Scene {
@@ -99,9 +86,11 @@ export class DefenseScene extends Phaser.Scene {
   private playerFireCooldown = 0;
   private playerDamageCooldown = 0;
   private pulseCooldown = 0;
-  private pulseButtonHeld = false;
-  private fireButtonHeld = false;
-  private pointerTarget: Phaser.Math.Vector2 | null = null;
+  private patrolTangent: Point = { x: 1, y: 0 };
+  private patrolOrigin: Point = { x: 0, y: 0 };
+  private patrolAlong = 0;
+  private patrolDir: 1 | -1 = 1;
+  private patrolSpan: number = GAMEPLAY_CONFIG.player.patrolSpan;
 
   private enemies: Enemy[] = [];
   private towers: Tower[] = [];
@@ -115,7 +104,6 @@ export class DefenseScene extends Phaser.Scene {
   private spawnQueue: EnemyKind[] = [];
   private selectedTower: Tower | null = null;
   private selectedTowerKind: TowerKind = 'cannon';
-  private selectedWeapon: WeaponKind = 'pulse';
   private slotMenu: Phaser.GameObjects.Container | null = null;
   private slotMenuTarget: BuildSlot | null = null;
   private towerCard: Phaser.GameObjects.Container | null = null;
@@ -123,7 +111,9 @@ export class DefenseScene extends Phaser.Scene {
   private cardInfo: Phaser.GameObjects.Text | null = null;
   private cardUpgradeLabel: Phaser.GameObjects.Text | null = null;
   private cardSellLabel: Phaser.GameObjects.Text | null = null;
-  private weaponButtons: Phaser.GameObjects.Rectangle[] = [];
+  private portrait!: Phaser.GameObjects.Image;
+  private portraitCooldown!: Phaser.GameObjects.Text;
+  private portraitHealth!: Phaser.GameObjects.Text;
   private baseLivesBar!: Phaser.GameObjects.Graphics;
   private upcomingText!: Phaser.GameObjects.Text;
 
@@ -198,7 +188,8 @@ export class DefenseScene extends Phaser.Scene {
     this.pulseCooldown = Math.max(0, this.pulseCooldown - seconds);
     this.invulnerableTimer = Math.max(0, this.invulnerableTimer - seconds);
 
-    this.movePlayer(seconds);
+    this.readCombatKeys();
+    this.patrolHero(seconds);
     this.updateEnemies(seconds);
     this.updateTowerFire(seconds);
     this.updateProjectiles(seconds);
@@ -311,10 +302,11 @@ export class DefenseScene extends Phaser.Scene {
 
     this.add.rectangle(width / 2, top / 2, width, top, 0x111d21).setDepth(10);
     this.add.rectangle(width / 2, top, width, 2, 0x405450).setDepth(11);
-    this.coinsText = this.add.text(16, 12, 'МОНЕТЫ 110', this.hudStyle(13, '#f3cf79')).setDepth(12);
+    this.createPortrait(top);
+    this.coinsText = this.add.text(78, 12, 'МОНЕТЫ 110', this.hudStyle(13, '#f3cf79')).setDepth(12);
     this.baseLivesBar = this.add.graphics().setDepth(12);
     this.baseText = this.add.text(lives.x + lives.width + 8, 12, '100', this.hudStyle(13, '#91e0b4')).setDepth(12);
-    this.waveText = this.add.text(360, 12, 'ВОЛНА 00', this.hudStyle(13, '#e5e8d2')).setDepth(12);
+    this.waveText = this.add.text(390, 12, 'ВОЛНА 00', this.hudStyle(13, '#e5e8d2')).setDepth(12);
     this.phaseText = this.add.text(490, 13, 'ФАЗА 1', this.hudStyle(11, '#f3cf79')).setDepth(12);
 
     const shopButton = this.add.rectangle(640, top / 2, 88, 26, 0x3a3420)
@@ -342,6 +334,19 @@ export class DefenseScene extends Phaser.Scene {
       align: 'center', wordWrap: { width: waveButton.width + 20 },
     }).setOrigin(0.5, 1).setDepth(21);
     this.drawBaseLives();
+  }
+
+  private createPortrait(top: number): void {
+    const button = this.add.rectangle(30, top / 2, 40, 32, 0x142126)
+      .setStrokeStyle(2, 0x7de0ca)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(12);
+    button.on('pointerdown', () => this.usePulse());
+    this.portrait = this.add.image(30, top / 2, 'hero').setScale(0.5).setDepth(13);
+    this.portraitCooldown = this.add.text(30, top - 1, '', this.hudStyle(8, '#d5fff3')).setOrigin(0.5, 1).setDepth(14);
+    this.portraitHealth = this.add.text(30, top - 2, String(GAMEPLAY_CONFIG.player.maxHealth), this.hudStyle(8, '#ff9f8e'))
+      .setOrigin(0.5, 0)
+      .setDepth(14);
   }
 
   private drawBaseLives(): void {
@@ -558,6 +563,7 @@ export class DefenseScene extends Phaser.Scene {
   private applyHeroSkin(): void {
     const texture = this.heroSkinOwned ? GAMEPLAY_CONFIG.shop.heroSkin.texture : 'hero';
     this.player.setTexture(texture);
+    this.portrait.setTexture(texture);
   }
 
   private readHeroSkin(): boolean {
@@ -582,66 +588,25 @@ export class DefenseScene extends Phaser.Scene {
 
   private createActors(): void {
     this.player = this.add.image(this.playerX, this.playerY, 'hero').setDepth(7);
-    this.createMobileButtons();
   }
 
   private createInput(): void {
     if (!this.input.keyboard) throw new Error('Keyboard input is unavailable.');
     this.keys = this.input.keyboard.addKeys({
-      left: Phaser.Input.Keyboard.KeyCodes.LEFT,
-      right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
-      up: Phaser.Input.Keyboard.KeyCodes.UP,
-      down: Phaser.Input.Keyboard.KeyCodes.DOWN,
-      a: Phaser.Input.Keyboard.KeyCodes.A,
-      d: Phaser.Input.Keyboard.KeyCodes.D,
-      w: Phaser.Input.Keyboard.KeyCodes.W,
-      s: Phaser.Input.Keyboard.KeyCodes.S,
-      space: Phaser.Input.Keyboard.KeyCodes.SPACE,
       q: Phaser.Input.Keyboard.KeyCodes.Q,
       p: Phaser.Input.Keyboard.KeyCodes.P,
       escape: Phaser.Input.Keyboard.KeyCodes.ESC,
       enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
       r: Phaser.Input.Keyboard.KeyCodes.R,
-      one: Phaser.Input.Keyboard.KeyCodes.ONE,
-      two: Phaser.Input.Keyboard.KeyCodes.TWO,
-      three: Phaser.Input.Keyboard.KeyCodes.THREE,
     }) as Keys;
 
-    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
-      const dockTop = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.bottomReserve;
-      if (this.mode === 'playing' && currentlyOver.length === 0) {
-        this.closeSlotMenu();
-        this.closeTowerCard();
-        this.selectedTower = null;
-        this.showTowerRange(null);
-      }
-      if (this.mode !== 'playing' || currentlyOver.length > 0
-        || pointer.y < GAMEPLAY_CONFIG.hud.topHeight || pointer.y > dockTop) return;
-      this.pointerTarget = new Phaser.Math.Vector2(pointer.x, pointer.y);
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, (_pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+      if (this.mode !== 'playing' || currentlyOver.length > 0) return;
+      this.closeSlotMenu();
+      this.closeTowerCard();
+      this.selectedTower = null;
+      this.showTowerRange(null);
     });
-    this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
-      if (this.mode === 'playing' && pointer.isDown && this.pointerTarget) {
-        this.pointerTarget.set(pointer.x, pointer.y);
-      }
-    });
-    this.input.on(Phaser.Input.Events.POINTER_UP, () => { this.pointerTarget = null; });
-  }
-
-  private createMobileButtons(): void {
-    if (!this.sys.game.device.input.touch) return;
-    const buttonY = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.bottomReserve - 46;
-    const fire = this.add.circle(884, buttonY, 34, 0x8b593e, 0.9)
-      .setStrokeStyle(2, 0xf1b57d).setInteractive().setDepth(20);
-    const pulse = this.add.circle(805, buttonY, 29, 0x315b61, 0.9)
-      .setStrokeStyle(2, 0x7de0ca).setInteractive().setDepth(20);
-    this.add.text(884, buttonY, 'ОГОНЬ', this.hudStyle(9, '#fff0d9')).setOrigin(0.5).setDepth(21);
-    this.add.text(805, buttonY, 'Q', this.hudStyle(15, '#d5fff3')).setOrigin(0.5).setDepth(21);
-    fire.on('pointerdown', () => { this.fireButtonHeld = true; });
-    fire.on('pointerup', () => { this.fireButtonHeld = false; });
-    fire.on('pointerout', () => { this.fireButtonHeld = false; });
-    pulse.on('pointerdown', () => { this.pulseButtonHeld = true; });
-    pulse.on('pointerup', () => { this.pulseButtonHeld = false; });
-    pulse.on('pointerout', () => { this.pulseButtonHeld = false; });
   }
 
   private showMenu(): void {
@@ -673,7 +638,7 @@ export class DefenseScene extends Phaser.Scene {
         align: 'center', lineSpacing: 9,
       }).setOrigin(0.5);
     const controls = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 350,
-      'WASD — движение   •   1 2 3 — оружие   •   Пробел — огонь   •   Q — ЭМИ   •   Кликни площадку — стройка   •   P — пауза', {
+      'Кликни площадку — стройка   •   ВОЛНА — следующая волна   •   Портрет — ЭМИ   •   P — пауза', {
         fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#91aaa0',
       }).setOrigin(0.5);
     this.modal.add([overlay, panel, title, pitch, controls]);
@@ -719,25 +684,21 @@ export class DefenseScene extends Phaser.Scene {
     this.coins = GAMEPLAY_CONFIG.economy.startingCoins;
     this.kills = 0;
     this.playerHealth = GAMEPLAY_CONFIG.player.maxHealth;
-    this.playerX = GAMEPLAY_CONFIG.player.start.x;
-    this.playerY = GAMEPLAY_CONFIG.player.start.y;
     this.playerFireCooldown = 0;
     this.playerDamageCooldown = 0;
     this.pulseCooldown = 0;
     this.phase = 1;
     this.phaseAnnouncementRemaining = 0;
     this.selectedTowerKind = 'cannon';
-    this.selectedWeapon = 'pulse';
     this.selectedTower = null;
     this.closeSlotMenu();
     this.closeTowerCard();
     this.setShop(false);
     this.charmActive = false;
     this.refreshShopLabels();
-    this.refreshWeaponButtons();
+    this.anchorPatrol();
     this.player.setPosition(this.playerX, this.playerY).setVisible(true).clearTint().setRotation(0).setFlipX(false);
-    this.pointerTarget = null;
-    this.statusText.setText('Построй башни на площадках или отбивай врагов лично.');
+    this.statusText.setText('Герой патрулирует дорогу. Кликни площадку, чтобы строить.');
     this.launchWave();
     this.refreshHud();
   }
@@ -779,58 +740,69 @@ export class DefenseScene extends Phaser.Scene {
     }
   }
 
-  private movePlayer(seconds: number): void {
+  private readCombatKeys(): void {
     if (Phaser.Input.Keyboard.JustDown(this.keys.escape) || Phaser.Input.Keyboard.JustDown(this.keys.p)) {
       this.togglePause();
       return;
     }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.q)) this.usePulse();
+  }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.q) || this.pulseButtonHeld) {
-      this.usePulse();
-      this.pulseButtonHeld = false;
+  private anchorPatrol(): void {
+    let bestLength = 0;
+    let best: { x: number; y: number; tx: number; ty: number; nx: number; ny: number; length: number } = {
+      x: GAMEPLAY_CONFIG.player.start.x,
+      y: GAMEPLAY_CONFIG.player.start.y,
+      tx: 1,
+      ty: 0,
+      nx: 0,
+      ny: -1,
+      length: GAMEPLAY_CONFIG.player.patrolSpan,
+    };
+    for (let index = 0; index < this.route.length - 1; index += 1) {
+      const start = this.route[index];
+      const end = this.route[index + 1];
+      if (!start || !end) continue;
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
+      if (Math.abs(dx) < Math.abs(dy) || length <= bestLength) continue;
+      bestLength = length;
+      best = {
+        x: (start.x + end.x) / 2,
+        y: (start.y + end.y) / 2,
+        tx: dx / length,
+        ty: dy / length,
+        nx: -dy / length,
+        ny: dx / length,
+        length,
+      };
     }
-    if (Phaser.Input.Keyboard.JustDown(this.keys.one)) this.selectWeapon('pulse');
-    if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.selectWeapon('rail');
-    if (Phaser.Input.Keyboard.JustDown(this.keys.three)) this.selectWeapon('scatter');
+    const offset = GAMEPLAY_CONFIG.player.patrolOffset;
+    this.patrolOrigin = { x: best.x + best.nx * offset, y: best.y + best.ny * offset };
+    this.patrolTangent = { x: best.tx, y: best.ty };
+    this.patrolSpan = Math.min(GAMEPLAY_CONFIG.player.patrolSpan, best.length * 0.7);
+    this.patrolAlong = 0;
+    this.patrolDir = 1;
+    this.playerX = this.patrolOrigin.x;
+    this.playerY = this.patrolOrigin.y;
+  }
 
-    let dx = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown);
-    let dy = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown);
-    if (dx === 0 && dy === 0 && this.pointerTarget) {
-      dx = this.pointerTarget.x - this.playerX;
-      dy = this.pointerTarget.y - this.playerY;
-      if (Math.hypot(dx, dy) < GAMEPLAY_CONFIG.player.touchMoveThreshold) {
-        this.pointerTarget = null;
-        dx = 0;
-        dy = 0;
-      }
+  private patrolHero(seconds: number): void {
+    this.patrolAlong += this.patrolDir * GAMEPLAY_CONFIG.player.patrolSpeed * seconds;
+    if (this.patrolAlong > this.patrolSpan / 2) {
+      this.patrolAlong = this.patrolSpan / 2;
+      this.patrolDir = -1;
+    } else if (this.patrolAlong < -this.patrolSpan / 2) {
+      this.patrolAlong = -this.patrolSpan / 2;
+      this.patrolDir = 1;
     }
-
-    if (dx !== 0 || dy !== 0) {
-      const length = Math.hypot(dx, dy);
-      this.playerX += (dx / length) * GAMEPLAY_CONFIG.player.speed * seconds;
-      this.playerY += (dy / length) * GAMEPLAY_CONFIG.player.speed * seconds;
-    }
-    this.playerX = Phaser.Math.Clamp(
-      this.playerX,
-      GAMEPLAY_CONFIG.player.bounds.left,
-      GAMEPLAY_CONFIG.scene.width - GAMEPLAY_CONFIG.player.bounds.right,
-    );
-    this.playerY = Phaser.Math.Clamp(
-      this.playerY,
-      GAMEPLAY_CONFIG.player.bounds.top,
-      GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.player.bounds.bottom,
-    );
-    this.player.setPosition(this.playerX, this.playerY);
-
+    this.playerX = this.patrolOrigin.x + this.patrolTangent.x * this.patrolAlong;
+    this.playerY = this.patrolOrigin.y + this.patrolTangent.y * this.patrolAlong;
+    this.player.setPosition(this.playerX, this.playerY).setRotation(0);
+    this.player.setFlipX(this.patrolTangent.x * this.patrolDir < 0);
     const target = this.findClosestEnemy(this.playerX, this.playerY, GAMEPLAY_CONFIG.player.targetRange);
-    this.player.setRotation(0);
-    if (dx < 0) this.player.setFlipX(true);
-    else if (dx > 0) this.player.setFlipX(false);
-
-    if ((this.keys.space.isDown || this.fireButtonHeld) && this.playerFireCooldown <= 0 && target) {
-      this.fireHeroWeapon(target);
-    }
-
+    if (target && this.playerFireCooldown <= 0) this.fireHeroShot(target);
     if (this.invulnerableTimer <= 0) this.player.clearTint();
   }
 
@@ -851,65 +823,18 @@ export class DefenseScene extends Phaser.Scene {
     return this.charmActive ? baseDamage * GAMEPLAY_CONFIG.shop.charm.damageMultiplier : baseDamage;
   }
 
-  private fireHeroWeapon(target: Enemy): void {
-    const angle = Phaser.Math.Angle.Between(this.playerX, this.playerY, target.body.x, target.body.y);
-    if (this.selectedWeapon === 'pulse') {
-      const spec = GAMEPLAY_CONFIG.weapon.pulse;
-      this.fireProjectile(this.playerX, this.playerY, target, this.heroWeaponDamage(spec.damage), spec.speed, 'player', { color: spec.color });
-      this.playerFireCooldown = spec.cooldown;
-      return;
-    }
-
-    if (this.selectedWeapon === 'rail') {
-      const spec = GAMEPLAY_CONFIG.weapon.rail;
-      this.fireProjectile(this.playerX, this.playerY, target, this.heroWeaponDamage(spec.damage), spec.speed, 'player', {
-        color: spec.color,
-        pierce: spec.pierce,
-        lifetime: spec.lifetime,
-      });
-      this.playerFireCooldown = spec.cooldown;
-      return;
-    }
-
-    const spec = GAMEPLAY_CONFIG.weapon.scatter;
-    const pelletCount = spec.pelletCount ?? 1;
-    for (let index = 0; index < pelletCount; index += 1) {
-      const spreadIndex = index - (pelletCount - 1) / 2;
-      this.fireProjectile(this.playerX, this.playerY, target, this.heroWeaponDamage(spec.damage), spec.speed, 'player', {
-        color: spec.color,
-        lifetime: spec.lifetime,
-      }, angle + spreadIndex * (spec.spreadAngle ?? 0));
-    }
+  private fireHeroShot(target: Enemy): void {
+    const spec = GAMEPLAY_CONFIG.weapon.pulse;
+    this.fireProjectile(
+      this.playerX,
+      this.playerY,
+      target,
+      this.heroWeaponDamage(spec.damage),
+      spec.speed,
+      'player',
+      { color: spec.color },
+    );
     this.playerFireCooldown = spec.cooldown;
-  }
-
-  private selectWeapon(kind: WeaponKind): void {
-    this.selectedWeapon = kind;
-    this.refreshWeaponButtons();
-    const names: Record<WeaponKind, string> = {
-      pulse: 'КАРАБИН: сбалансированный одиночный выстрел',
-      rail: 'РЕЛЬСА: мощный пробивающий заряд',
-      scatter: 'ДРОБОВИК: веер из пяти близких зарядов',
-    };
-    this.statusText.setText(names[kind]);
-  }
-
-  private refreshWeaponButtons(): void {
-    const fireReady = this.playerFireCooldown <= 0;
-    this.weaponButtons.forEach((button, index) => {
-      const kind = (['pulse', 'rail', 'scatter'] as const)[index];
-      if (!kind) return;
-      const selected = kind === this.selectedWeapon;
-      button.setFillStyle(selected ? 0x397960 : 0x263b38);
-      button.setAlpha(selected
-        ? (fireReady ? 1 : 0.45)
-        : GAMEPLAY_CONFIG.ui.unselectedButtonAlpha);
-      button.setStrokeStyle(selected && fireReady ? 2 : 1, selected ? 0xf3cf79 : 0x759182);
-    });
-  }
-
-  private refreshHotkeyHighlights(): void {
-    this.refreshWeaponButtons();
   }
 
   private usePulse(): void {
@@ -1721,7 +1646,6 @@ export class DefenseScene extends Phaser.Scene {
     this.closeSlotMenu();
     this.closeTowerCard();
     this.mode = 'gameover';
-    this.pointerTarget = null;
     const newRecord = this.wave > this.bestWave;
     this.bestWave = Math.max(this.bestWave, this.wave);
     this.saveBestWave(this.bestWave);
@@ -1771,8 +1695,10 @@ export class DefenseScene extends Phaser.Scene {
     this.phaseText.setText(this.phase === 2 ? 'ФАЗА 2' : 'ФАЗА 1');
     this.upcomingText.setText(this.upcomingLabel());
     this.drawBaseLives();
+    this.portraitHealth.setText(String(this.playerHealth));
+    this.portraitCooldown.setText(this.pulseCooldown > 0 ? this.pulseCooldown.toFixed(0) : '');
+    this.portrait.setAlpha(this.mode === 'playing' && this.pulseCooldown <= 0 ? 1 : 0.55);
     this.refreshUpgradeButton();
-    this.refreshHotkeyHighlights();
   }
 
   private refreshHud(): void {
