@@ -118,6 +118,8 @@ export class DefenseScene extends Phaser.Scene {
   private handFlash!: Phaser.GameObjects.Arc;
   private handTime = 0;
   private handClickTimer = 0;
+  private handBuilt = false;
+  private handWaved = false;
   private baseLivesBar!: Phaser.GameObjects.Graphics;
   private upcomingText!: Phaser.GameObjects.Text;
 
@@ -172,6 +174,8 @@ export class DefenseScene extends Phaser.Scene {
     this.refreshShopLabels();
     this.createInput();
     this.bestWave = this.readBestWave();
+    this.handBuilt = this.readStoredFlag('last-line-hand-built');
+    this.handWaved = this.readStoredFlag('last-line-hand-waved');
     this.showMenu();
   }
 
@@ -599,9 +603,19 @@ export class DefenseScene extends Phaser.Scene {
     this.hand = this.add.image(0, 0, 'hand').setDepth(25).setVisible(false);
   }
 
+  private handTarget(): Point | null {
+    if (!this.handBuilt) {
+      const slot = this.slots.find((item) => item.tower === null);
+      return slot ? { x: slot.x, y: slot.y } : null;
+    }
+    if (this.handWaved) return null;
+    const button = GAMEPLAY_CONFIG.hud.waveButton;
+    return { x: button.x, y: button.y };
+  }
+
   private updateHand(seconds: number): void {
-    const slot = this.mode === 'playing' ? this.slots.find((item) => item.tower === null) : undefined;
-    if (!slot) {
+    const target = this.mode === 'playing' ? this.handTarget() : null;
+    if (!target) {
       this.hand.setVisible(false);
       this.handFlash.setAlpha(0);
       return;
@@ -610,13 +624,39 @@ export class DefenseScene extends Phaser.Scene {
     this.handTime += seconds;
     const tutorial = GAMEPLAY_CONFIG.tutorial;
     const bob = Math.sin((this.handTime * Math.PI * 2) / tutorial.bobSeconds) * tutorial.bobPixels;
-    const x = slot.x;
-    const y = slot.y - tutorial.handLift + bob;
-    this.hand.setPosition(x, y);
+    this.hand.setPosition(target.x, target.y - tutorial.handLift + bob);
     this.handClickTimer += seconds;
     if (this.handClickTimer < tutorial.clickEverySeconds) return;
     this.handClickTimer = 0;
-    this.playHandClick(x, slot.y);
+    this.playHandClick(target.x, target.y);
+  }
+
+  private rememberHandBuilt(): void {
+    if (this.handBuilt) return;
+    this.handBuilt = true;
+    this.writeStoredFlag('last-line-hand-built');
+  }
+
+  private rememberHandWaved(): void {
+    if (!this.handBuilt || this.handWaved) return;
+    this.handWaved = true;
+    this.writeStoredFlag('last-line-hand-waved');
+  }
+
+  private readStoredFlag(key: string): boolean {
+    try {
+      return window.localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  private writeStoredFlag(key: string): void {
+    try {
+      window.localStorage.setItem(key, '1');
+    } catch {
+      // Local storage may be unavailable in private browsing.
+    }
   }
 
   private playHandClick(x: number, y: number): void {
@@ -1396,6 +1436,7 @@ export class DefenseScene extends Phaser.Scene {
         return;
       }
       this.beginPhaseTwoTransition();
+      this.rememberHandWaved();
       return;
     }
     if (fieldClear) {
@@ -1405,6 +1446,7 @@ export class DefenseScene extends Phaser.Scene {
       this.enqueueWave(this.wave);
       this.statusText.setText(`ВОЛНА ${this.wave} ВЫЗВАНА РАНЬШЕ`);
     }
+    this.rememberHandWaved();
     this.refreshHud();
   }
 
@@ -1510,6 +1552,7 @@ export class DefenseScene extends Phaser.Scene {
     }
     this.coins -= spec.cost;
     this.selectedTowerKind = kind;
+    this.rememberHandBuilt();
     const tower = this.placeTower(slot, kind, spec.cost);
     this.closeSlotMenu();
     this.statusText.setText(`${spec.name.toUpperCase()} УСТАНОВЛЕНА · УР. 1`);
