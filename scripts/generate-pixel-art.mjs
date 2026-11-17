@@ -179,6 +179,89 @@ function flyer(flap) {
     art.rect(25, wingY - 2, 3, 2, 0x9fd0ea);
   });
 }
+const UNIT = 48;
+
+function drawSideUnit(art, frame, spec) {
+  const { rect, set } = art;
+  const bob = frame % 2 === 0 ? 0 : -1;
+  const front = [5, 2, -4, -1][frame];
+  const back = [-4, -1, 5, 2][frame];
+  const hip = 31 + bob;
+  const bodyTop = hip - spec.bodyH;
+  const headTop = bodyTop - spec.headH + 3;
+  const cx = spec.cx;
+  rect(cx - 4 + back, hip, 4, 41 - hip, spec.dark);
+  rect(cx - 5 + back, 41, 6, 3, spec.boot);
+  rect(cx, bodyTop, spec.bodyW, spec.bodyH, spec.body);
+  rect(cx + 1, bodyTop + 2, Math.max(4, spec.bodyW - 6), 4, spec.accent);
+  const headX = cx + spec.bodyW - spec.headW + 1;
+  rect(headX, headTop, spec.headW, spec.headH, spec.skin);
+  rect(headX, headTop, spec.headW, 3, spec.helm);
+  set(headX + spec.headW - 3, headTop + 5, 0x1a120c);
+  set(headX + spec.headW - 2, headTop + 5, 0xfff8ee);
+  rect(cx + 2 + front, hip - 1, 4, 42 - hip, spec.dark);
+  rect(cx + 1 + front, 41, 7, 3, spec.boot);
+  spec.mark?.(art, cx, bodyTop, headX, headTop);
+}
+
+function sideUnit(frame, spec) {
+  return sized(UNIT, UNIT, (art) => drawSideUnit(art, frame, spec));
+}
+
+const unitSpecs = {
+  scout: {
+    body: 0xe5c36d, accent: 0xf0d48a, skin: 0xf6e2b8, dark: 0x8a6230, boot: 0x3a2a18, helm: 0xc4a24a,
+    bodyW: 12, bodyH: 12, headW: 9, headH: 8, cx: 16,
+    mark: (art, cx, bodyTop) => {
+      art.rect(cx + 10, bodyTop + 5, 12, 2, 0x6b5340);
+      art.rect(cx + 20, bodyTop + 3, 3, 6, 0xd8d0c4);
+    },
+  },
+  raider: {
+    body: 0xe89562, accent: 0xffb27a, skin: 0xf0c098, dark: 0x8a4030, boot: 0x3a2218, helm: 0xa84838,
+    bodyW: 12, bodyH: 12, headW: 9, headH: 8, cx: 16,
+    mark: (art, cx, bodyTop) => {
+      art.rect(cx + 8, bodyTop + 2, 3, 12, 0xd0d4dc);
+      art.rect(cx + 6, bodyTop + 1, 7, 3, 0xf2f4f8);
+    },
+  },
+  brute: {
+    body: 0xc97067, accent: 0xdea098, skin: 0xe8b0a4, dark: 0x5c302c, boot: 0x3a1614, helm: 0x8a4038,
+    bodyW: 18, bodyH: 14, headW: 12, headH: 10, cx: 12,
+    mark: (art, cx, bodyTop) => {
+      art.rect(cx - 5, bodyTop + 4, 5, 6, 0xa85a54);
+      art.rect(cx + 16, bodyTop + 2, 4, 14, 0x6b5340);
+      art.rect(cx + 14, bodyTop + 14, 8, 4, 0x5c4030);
+    },
+  },
+  boss: {
+    body: 0xc17193, accent: 0xe0a0bc, skin: 0xf0c0d0, dark: 0x6e3450, boot: 0x4a1830, helm: 0xf2c6da,
+    bodyW: 18, bodyH: 15, headW: 12, headH: 10, cx: 12,
+    mark: (art, cx, bodyTop, headX, headTop) => {
+      art.rect(headX + 1, headTop - 4, 10, 4, 0xf2c6da);
+      art.rect(headX + 2, headTop - 6, 2, 3, 0xffe4f0);
+      art.rect(headX + 8, headTop - 6, 2, 3, 0xffe4f0);
+      art.rect(cx + 16, bodyTop + 4, 3, 12, 0x6e3450);
+      art.rect(cx + 14, bodyTop + 2, 8, 3, 0xf2c6da);
+    },
+  },
+};
+
+function flyerFrame(frame) {
+  return sized(UNIT, UNIT, (art) => {
+    drawSideUnit(art, frame, {
+      body: 0x7eb6d8, accent: 0xb7e4f6, skin: 0xe8f6ff, dark: 0x3a6480, boot: 0x2a4458, helm: 0x9fd0ea,
+      bodyW: 12, bodyH: 11, headW: 9, headH: 8, cx: 18,
+    });
+    const lift = [8, 4, 0, 4][frame];
+    const wingY = 16 - lift;
+    art.rect(4, wingY, 14, 4, 0xd8f4ff);
+    art.rect(6, wingY - 3, 8, 3, 0x9fd0ea);
+    art.rect(30, wingY + 2, 12, 3, 0xd8f4ff);
+    art.set(8, wingY + 1, 0xffffff);
+  });
+}
+
 function boss(step) {
   return sized(48, 48, ({ rect, set }) => {
     const lift = step * 2;
@@ -253,6 +336,10 @@ const sprites = {
     rect(30, 15, 6, 3, 0xfff6c4);
     rect(30, 22, 6, 3, 0xfff6c4);
   }),
+  ...Object.fromEntries(['scout', 'raider', 'brute', 'boss'].flatMap((kind) => (
+    [0, 1, 2, 3].map((frame) => [`enemy-${kind}-${frame}.png`, sideUnit(frame, unitSpecs[kind])])
+  ))),
+  ...Object.fromEntries([0, 1, 2, 3].map((frame) => [`enemy-flyer-${frame}.png`, flyerFrame(frame)])),
   'projectile-homing.png': sized(16, 16, ({ rect }) => {
     rect(1, 6, 9, 4, 0xf3e27a);
     rect(9, 5, 5, 6, 0xfff6c4);
