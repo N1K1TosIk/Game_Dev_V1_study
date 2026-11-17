@@ -26,7 +26,7 @@ interface Enemy {
   segment: number;
   slowTimer: number;
   slowFactor: number;
-  animTime: number;
+  distanceWalked: number;
   animFrame: number;
   pose: 'side' | 'front' | 'back';
 }
@@ -939,8 +939,9 @@ export class DefenseScene extends Phaser.Scene {
       const enemy = this.enemies[index];
       if (!enemy) continue;
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - seconds);
-      this.moveEnemy(enemy, seconds);
-      this.animateEnemy(enemy, seconds);
+      const moved = this.moveEnemy(enemy, seconds);
+      this.stepSprite(enemy, moved);
+      this.faceEnemy(enemy);
       this.syncEnemyHealthBar(enemy);
       if (enemy.segment >= this.route.length - 1) {
         enemy.body.destroy();
@@ -980,19 +981,13 @@ export class DefenseScene extends Phaser.Scene {
     });
   }
 
-  private animateEnemy(enemy: Enemy, seconds: number): void {
-    if (enemy.kind === 'flyer' || this.pathStep(enemy).horizontal) {
-      enemy.animTime += seconds;
-      const baseInterval = enemy.kind === 'flyer'
-        ? GAMEPLAY_CONFIG.enemy.flyerFlapSeconds
-        : GAMEPLAY_CONFIG.enemy.stepSeconds;
-      const interval = baseInterval * (enemy.slowTimer > 0 ? 1.6 : 1);
-      if (enemy.animTime >= interval) {
-        enemy.animTime = 0;
-        enemy.animFrame = (enemy.animFrame + 1) % GAMEPLAY_CONFIG.enemy.walkFrames;
-      }
-    }
-    this.faceEnemy(enemy);
+  private stepSprite(enemy: Enemy, moved: number): void {
+    if (enemy.kind !== 'flyer' && !this.pathStep(enemy).horizontal) return;
+    enemy.distanceWalked += moved;
+    const stride = enemy.kind === 'flyer'
+      ? GAMEPLAY_CONFIG.enemy.flyerFlapDistance
+      : GAMEPLAY_CONFIG.enemy.stepDistance;
+    enemy.animFrame = Math.floor(enemy.distanceWalked / stride) % GAMEPLAY_CONFIG.enemy.walkFrames;
   }
 
   private pathStep(enemy: Enemy): { dx: number; dy: number; horizontal: boolean } {
@@ -1027,52 +1022,52 @@ export class DefenseScene extends Phaser.Scene {
     return `enemy-${enemy.kind}-${enemy.pose}`;
   }
 
-  private moveEnemy(enemy: Enemy, seconds: number): void {
-    if (enemy.kind === 'flyer') {
-      this.moveFlyingEnemy(enemy, seconds);
-      return;
-    }
-    this.moveEnemyAlongRoute(enemy, seconds);
+  private moveEnemy(enemy: Enemy, seconds: number): number {
+    return enemy.kind === 'flyer'
+      ? this.moveFlyingEnemy(enemy, seconds)
+      : this.moveEnemyAlongRoute(enemy, seconds);
   }
 
   private enemyMoveSpeed(enemy: Enemy): number {
     return enemy.slowTimer > 0 ? enemy.speed * enemy.slowFactor : enemy.speed;
   }
 
-  private moveFlyingEnemy(enemy: Enemy, seconds: number): void {
-    const goalX = this.basePoint.x;
-    const goalY = this.basePoint.y;
-    const dx = goalX - enemy.body.x;
-    const dy = goalY - enemy.body.y;
+  private moveFlyingEnemy(enemy: Enemy, seconds: number): number {
+    const dx = this.basePoint.x - enemy.body.x;
+    const dy = this.basePoint.y - enemy.body.y;
     const distance = Math.hypot(dx, dy);
     if (distance <= GAMEPLAY_CONFIG.wave.flyingArrivalRadius) {
       enemy.segment = this.route.length - 1;
-      return;
+      return 0;
     }
     const step = Math.min(this.enemyMoveSpeed(enemy) * seconds, distance);
     enemy.body.x += (dx / distance) * step;
     enemy.body.y += (dy / distance) * step;
+    return step;
   }
 
-  private moveEnemyAlongRoute(enemy: Enemy, seconds: number): void {
-    const speed = this.enemyMoveSpeed(enemy);
-    let distanceLeft = speed * seconds;
+  private moveEnemyAlongRoute(enemy: Enemy, seconds: number): number {
+    let distanceLeft = this.enemyMoveSpeed(enemy) * seconds;
+    let moved = 0;
     while (distanceLeft > 0 && enemy.segment < this.route.length - 1) {
       const next = this.route[enemy.segment + 1];
-      if (!next) return;
+      if (!next) return moved;
       const dx = next.x - enemy.body.x;
       const dy = next.y - enemy.body.y;
       const distance = Math.hypot(dx, dy) || 1;
       if (distance <= distanceLeft) {
         enemy.body.setPosition(next.x, next.y);
         distanceLeft -= distance;
+        moved += distance;
         enemy.segment += 1;
       } else {
         enemy.body.x += (dx / distance) * distanceLeft;
         enemy.body.y += (dy / distance) * distanceLeft;
+        moved += distanceLeft;
         distanceLeft = 0;
       }
     }
+    return moved;
   }
 
   private updateTowerFire(seconds: number): void {
@@ -1425,7 +1420,7 @@ export class DefenseScene extends Phaser.Scene {
       segment: 0,
       slowTimer: 0,
       slowFactor: 1,
-      animTime: 0,
+      distanceWalked: 0,
       animFrame: 0,
       pose: 'side',
     };
