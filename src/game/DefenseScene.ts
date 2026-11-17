@@ -1046,8 +1046,35 @@ export class DefenseScene extends Phaser.Scene {
     return step;
   }
 
+  private routeProgress(enemy: Enemy): number {
+    let progress = 0;
+    for (let index = 0; index < enemy.segment && index < this.route.length - 1; index += 1) {
+      const start = this.route[index];
+      const end = this.route[index + 1];
+      if (!start || !end) continue;
+      progress += Math.hypot(end.x - start.x, end.y - start.y);
+    }
+    const start = this.route[enemy.segment];
+    if (!start) return progress;
+    return progress + Math.hypot(enemy.body.x - start.x, enemy.body.y - start.y);
+  }
+
+  private marchRoom(enemy: Enemy): number {
+    const progress = this.routeProgress(enemy);
+    const index = this.enemies.indexOf(enemy);
+    let room = Number.POSITIVE_INFINITY;
+    this.enemies.forEach((other, otherIndex) => {
+      if (other === enemy || other.kind === 'flyer') return;
+      const delta = this.routeProgress(other) - progress;
+      const otherIsAhead = delta > 0.5 || (Math.abs(delta) <= 0.5 && otherIndex < index);
+      if (!otherIsAhead) return;
+      room = Math.min(room, Math.max(delta, 0) - GAMEPLAY_CONFIG.enemy.marchGap);
+    });
+    return Math.max(0, room);
+  }
+
   private moveEnemyAlongRoute(enemy: Enemy, seconds: number): number {
-    let distanceLeft = this.enemyMoveSpeed(enemy) * seconds;
+    let distanceLeft = Math.min(this.enemyMoveSpeed(enemy) * seconds, this.marchRoom(enemy));
     let moved = 0;
     while (distanceLeft > 0 && enemy.segment < this.route.length - 1) {
       const next = this.route[enemy.segment + 1];

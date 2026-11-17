@@ -129,6 +129,7 @@ export const GAMEPLAY_CONFIG = {
     stepDistance: 12,
     flyerFlapDistance: 16,
     walkFrames: 4,
+    marchGap: 52,
   } satisfies Record<EnemyKind, EnemySpec> & {
     collisionRadius: number;
     bossExtraCollisionRadius: number;
@@ -136,6 +137,7 @@ export const GAMEPLAY_CONFIG = {
     stepDistance: number;
     flyerFlapDistance: number;
     walkFrames: number;
+    marchGap: number;
   },
   projectile: {
     playerRadius: 5,
