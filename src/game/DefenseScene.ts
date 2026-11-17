@@ -114,6 +114,10 @@ export class DefenseScene extends Phaser.Scene {
   private portrait!: Phaser.GameObjects.Image;
   private portraitCooldown!: Phaser.GameObjects.Text;
   private portraitHealth!: Phaser.GameObjects.Text;
+  private hand!: Phaser.GameObjects.Image;
+  private handFlash!: Phaser.GameObjects.Arc;
+  private handTime = 0;
+  private handClickTimer = 0;
   private baseLivesBar!: Phaser.GameObjects.Graphics;
   private upcomingText!: Phaser.GameObjects.Text;
 
@@ -153,7 +157,7 @@ export class DefenseScene extends Phaser.Scene {
       ...this.enemyTextureKeys(),
       'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing',
       'tower-cannon-barrel', 'tower-rapid-barrel', 'tower-cryo-barrel', 'tower-homing-barrel',
-      'projectile-homing',
+      'projectile-homing', 'hand',
     ]) {
       this.load.image(key, `assets/${key}.png`);
     }
@@ -173,16 +177,19 @@ export class DefenseScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (this.mode === 'phase-transition') {
+      this.hand.setVisible(false);
       this.updatePhaseTransition(delta);
       return;
     }
 
     if (this.mode !== 'playing') {
+      this.hand.setVisible(false);
       this.updatePausedKeys();
       return;
     }
 
     const seconds = Math.min(delta / 1000, GAMEPLAY_CONFIG.scene.deltaLimitSeconds);
+    this.updateHand(seconds);
     this.playerFireCooldown = Math.max(0, this.playerFireCooldown - seconds);
     this.playerDamageCooldown = Math.max(0, this.playerDamageCooldown - seconds);
     this.pulseCooldown = Math.max(0, this.pulseCooldown - seconds);
@@ -588,6 +595,49 @@ export class DefenseScene extends Phaser.Scene {
 
   private createActors(): void {
     this.player = this.add.image(this.playerX, this.playerY, 'hero').setDepth(7);
+    this.handFlash = this.add.circle(0, 0, GAMEPLAY_CONFIG.tutorial.handLift / 3, 0xfff6c4, 0).setDepth(24);
+    this.hand = this.add.image(0, 0, 'hand').setDepth(25).setVisible(false);
+  }
+
+  private updateHand(seconds: number): void {
+    const slot = this.mode === 'playing' ? this.slots.find((item) => item.tower === null) : undefined;
+    if (!slot) {
+      this.hand.setVisible(false);
+      this.handFlash.setAlpha(0);
+      return;
+    }
+    this.hand.setVisible(true);
+    this.handTime += seconds;
+    const tutorial = GAMEPLAY_CONFIG.tutorial;
+    const bob = Math.sin((this.handTime * Math.PI * 2) / tutorial.bobSeconds) * tutorial.bobPixels;
+    const x = slot.x;
+    const y = slot.y - tutorial.handLift + bob;
+    this.hand.setPosition(x, y);
+    this.handClickTimer += seconds;
+    if (this.handClickTimer < tutorial.clickEverySeconds) return;
+    this.handClickTimer = 0;
+    this.playHandClick(x, slot.y);
+  }
+
+  private playHandClick(x: number, y: number): void {
+    const tutorial = GAMEPLAY_CONFIG.tutorial;
+    this.tweens.killTweensOf(this.hand);
+    this.hand.setScale(1);
+    this.tweens.add({
+      targets: this.hand,
+      scaleX: tutorial.squashX,
+      scaleY: tutorial.squashY,
+      duration: 90,
+      yoyo: true,
+    });
+    this.handFlash.setPosition(x, y).setAlpha(0.85).setScale(0.35);
+    this.tweens.killTweensOf(this.handFlash);
+    this.tweens.add({
+      targets: this.handFlash,
+      alpha: 0,
+      scale: 1.3,
+      duration: tutorial.flashMs,
+    });
   }
 
   private createInput(): void {

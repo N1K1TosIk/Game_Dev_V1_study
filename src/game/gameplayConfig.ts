@@ -236,4 +236,13 @@ export const GAMEPLAY_CONFIG = {
   ui: {
     unselectedButtonAlpha: 0.82,
   },
+  tutorial: {
+    bobPixels: 8,
+    bobSeconds: 0.7,
+    clickEverySeconds: 1,
+    squashX: 1.15,
+    squashY: 0.72,
+    flashMs: 160,
+    handLift: 36,
+  },
 } as const;

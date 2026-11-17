@@ -241,6 +241,18 @@ function towerBarrel(body, tip) {
   });
 }
 
+function pointingHand() {
+  return sized(32, 40, ({ rect, set }) => {
+    rect(10, 2, 12, 8, 0x8d3b4a);
+    rect(11, 8, 10, 10, 0xf0d0a0);
+    rect(13, 10, 6, 6, 0xffe4c4);
+    rect(8, 12, 4, 4, 0xf0d0a0);
+    rect(14, 16, 4, 14, 0xf0d0a0);
+    rect(15, 28, 2, 6, 0xe0b888);
+    set(16, 20, 0xc89870);
+  });
+}
+
 function flyerFrame(frame) {
   return sized(UNIT, UNIT, (art) => {
     drawSideUnit(art, frame, {
@@ -315,6 +327,7 @@ const sprites = {
     [`enemy-${kind}-front.png`, facingUnit(unitSpecs[kind], false)],
     [`enemy-${kind}-back.png`, facingUnit(unitSpecs[kind], true)],
   ])),
+  'hand.png': pointingHand(),
   'projectile-homing.png': sized(16, 16, ({ rect }) => {
     rect(1, 6, 9, 4, 0xf3e27a);
     rect(9, 5, 5, 6, 0xfff6c4);
