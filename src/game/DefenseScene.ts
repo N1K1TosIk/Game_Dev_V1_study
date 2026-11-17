@@ -119,9 +119,10 @@ export class DefenseScene extends Phaser.Scene {
   private selectedWeapon: WeaponKind = 'pulse';
   private towerTypeButtons: Phaser.GameObjects.Rectangle[] = [];
   private buildSheet!: Phaser.GameObjects.Container;
-  private buildButton!: Phaser.GameObjects.Rectangle;
   private buildSheetOpen = false;
   private weaponButtons: Phaser.GameObjects.Rectangle[] = [];
+  private baseLivesBar!: Phaser.GameObjects.Graphics;
+  private upcomingText!: Phaser.GameObjects.Text;
 
   private wave = 0;
   private baseHealth: number = GAMEPLAY_CONFIG.base.maxHealth;
@@ -138,7 +139,6 @@ export class DefenseScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text;
   private baseText!: Phaser.GameObjects.Text;
   private coinsText!: Phaser.GameObjects.Text;
-  private playerText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private phaseText!: Phaser.GameObjects.Text;
   private upgradeButton!: Phaser.GameObjects.Rectangle;
@@ -151,10 +151,6 @@ export class DefenseScene extends Phaser.Scene {
   private charmActive = false;
   private shopSkinLabel!: Phaser.GameObjects.Text;
   private shopCharmLabel!: Phaser.GameObjects.Text;
-  private fireCooldownText!: Phaser.GameObjects.Text;
-  private fireKeyButton!: Phaser.GameObjects.Rectangle;
-  private pulseKeyButton!: Phaser.GameObjects.Rectangle;
-  private pulseKeyLabel!: Phaser.GameObjects.Text;
   private bestWave = 0;
 
   constructor() {
@@ -236,7 +232,7 @@ export class DefenseScene extends Phaser.Scene {
       baseX: scene.width - gen.baseInset,
       endX: scene.width - gen.baseInset + gen.endPastBase,
       minY: GAMEPLAY_CONFIG.hud.topHeight + gen.hudPadding,
-      maxY: scene.height - GAMEPLAY_CONFIG.hud.dockHeight - gen.hudPadding,
+      maxY: scene.height - GAMEPLAY_CONFIG.hud.bottomReserve - gen.hudPadding,
       minX: gen.slotMargin,
       maxX: scene.width - gen.slotMargin,
       turnCount: gen.turnCount,
@@ -311,64 +307,66 @@ export class DefenseScene extends Phaser.Scene {
     const width = GAMEPLAY_CONFIG.scene.width;
     const height = GAMEPLAY_CONFIG.scene.height;
     const top = GAMEPLAY_CONFIG.hud.topHeight;
-    const dock = GAMEPLAY_CONFIG.hud.dockHeight;
-    const dockTop = height - dock;
-    const actionY = dockTop + 48;
+    const lives = GAMEPLAY_CONFIG.hud.livesBar;
+    const waveButton = GAMEPLAY_CONFIG.hud.waveButton;
 
     this.add.rectangle(width / 2, top / 2, width, top, 0x111d21).setDepth(10);
     this.add.rectangle(width / 2, top, width, 2, 0x405450).setDepth(11);
-    this.add.text(16, 9, 'LAST LINE', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '16px', fontStyle: 'bold', color: '#d8f4dd',
-    }).setDepth(12);
-    this.waveText = this.add.text(132, 12, 'ВОЛНА 0', this.hudStyle(12, '#e5e8d2')).setDepth(12);
-    this.coinsText = this.add.text(250, 12, 'МОНЕТЫ 110', this.hudStyle(12, '#f3cf79')).setDepth(12);
-    this.baseText = this.add.text(400, 12, 'БАЗА 100', this.hudStyle(12, '#91e0b4')).setDepth(12);
-    this.playerText = this.add.text(520, 12, 'ГЕРОЙ 100', this.hudStyle(12, '#ff9f8e')).setDepth(12);
-    this.phaseText = this.add.text(650, 13, 'ФАЗА 1', this.hudStyle(10, '#f3cf79')).setDepth(12);
+    this.coinsText = this.add.text(16, 12, 'МОНЕТЫ 110', this.hudStyle(13, '#f3cf79')).setDepth(12);
+    this.baseLivesBar = this.add.graphics().setDepth(12);
+    this.baseText = this.add.text(lives.x + lives.width + 8, 12, '100', this.hudStyle(13, '#91e0b4')).setDepth(12);
+    this.waveText = this.add.text(360, 12, 'ВОЛНА 00', this.hudStyle(13, '#e5e8d2')).setDepth(12);
+    this.phaseText = this.add.text(490, 13, 'ФАЗА 1', this.hudStyle(11, '#f3cf79')).setDepth(12);
 
-    const pause = this.add.rectangle(902, top / 2, 78, 26, 0x293b3b)
-      .setStrokeStyle(1, 0x759182).setInteractive({ useHandCursor: true }).setDepth(12);
-    pause.on('pointerdown', () => this.togglePause());
-    this.add.text(902, top / 2, 'ПАУЗА', this.hudStyle(10, '#e5efe5')).setOrigin(0.5).setDepth(13);
-
-    this.add.rectangle(width / 2, dockTop + dock / 2, width, dock, 0x111d21).setDepth(10);
-    this.add.rectangle(width / 2, dockTop, width, 2, 0x405450).setDepth(11);
-    this.statusText = this.add.text(16, dockTop + 8, 'Нажми B, чтобы открыть строительство', {
-      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#c5d6cc',
-      wordWrap: { width: 500 },
-    }).setDepth(12);
-    const shopButton = this.add.rectangle(598, dockTop + 18, 96, 24, 0x3a3420)
+    const shopButton = this.add.rectangle(640, top / 2, 88, 26, 0x3a3420)
       .setStrokeStyle(1, 0xf3cf79).setInteractive({ useHandCursor: true }).setDepth(12);
     shopButton.on('pointerdown', () => this.toggleShop());
-    this.add.text(598, dockTop + 18, 'ЛАВКА', this.hudStyle(10, '#f3cf79')).setOrigin(0.5).setDepth(13);
+    this.add.text(640, top / 2, 'ЛАВКА', this.hudStyle(11, '#f3cf79')).setOrigin(0.5).setDepth(13);
 
-    this.addWeaponButton('pulse', 168, actionY);
-    this.addWeaponButton('rail', 292, actionY);
-    this.addWeaponButton('scatter', 416, actionY);
-    this.buildButton = this.add.rectangle(560, actionY, 124, 32, 0x263b38)
-      .setStrokeStyle(1, 0x8fbf9a).setInteractive({ useHandCursor: true }).setDepth(12);
-    this.buildButton.on('pointerdown', () => this.toggleBuildSheet());
-    this.add.text(560, actionY, 'B СТРОИТЬ', this.hudStyle(10, '#d9e8dc')).setOrigin(0.5).setDepth(13);
-    this.fireKeyButton = this.add.rectangle(700, dockTop + 18, 92, 24, 0x263b38)
-      .setStrokeStyle(1, 0xf1b57d).setDepth(12);
-    this.fireCooldownText = this.add.text(700, dockTop + 18, 'SPACE', this.hudStyle(10, '#fff0d9')).setOrigin(0.5).setDepth(13);
-    this.pulseKeyButton = this.add.rectangle(804, dockTop + 18, 64, 24, 0x263b38)
-      .setStrokeStyle(1, 0x7de0ca).setDepth(12);
-    this.pulseKeyLabel = this.add.text(804, dockTop + 18, 'Q', this.hudStyle(12, '#d5fff3')).setOrigin(0.5).setDepth(13);
+    const pause = this.add.rectangle(888, top / 2, 78, 26, 0x293b3b)
+      .setStrokeStyle(1, 0x759182).setInteractive({ useHandCursor: true }).setDepth(12);
+    pause.on('pointerdown', () => this.togglePause());
+    this.add.text(888, top / 2, 'ПАУЗА', this.hudStyle(10, '#e5efe5')).setOrigin(0.5).setDepth(13);
+
+    this.statusText = this.add.text(16, top + 8, 'Нажми B, чтобы открыть строительство', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#c5d6cc',
+      wordWrap: { width: 520 },
+    }).setDepth(12);
     this.createBuildSheet(width, height);
     this.createShop(width, height);
 
-    this.upgradeButton = this.add.rectangle(760, actionY, 116, 32, 0x263b38)
+    this.upgradeButton = this.add.rectangle(78, height - 22, 130, 28, 0x263b38)
       .setStrokeStyle(1, 0x637d70).setInteractive({ useHandCursor: true }).setDepth(12);
     this.upgradeButton.on('pointerdown', () => this.upgradeSelectedTower());
-    this.upgradeLabel = this.add.text(760, actionY, 'УЛУЧШИТЬ', this.hudStyle(9, '#a6b8ae'))
+    this.upgradeLabel = this.add.text(78, height - 22, 'УЛУЧШИТЬ', this.hudStyle(9, '#a6b8ae'))
       .setOrigin(0.5).setDepth(13);
-    this.sellButton = this.add.rectangle(888, actionY, 116, 32, 0x3a2a28)
+    this.sellButton = this.add.rectangle(220, height - 22, 130, 28, 0x3a2a28)
       .setStrokeStyle(1, 0xc98474).setInteractive({ useHandCursor: true }).setDepth(12);
     this.sellButton.on('pointerdown', () => this.sellSelectedTower());
-    this.sellLabel = this.add.text(888, actionY, 'ПРОДАТЬ', this.hudStyle(9, '#f0c2b6'))
+    this.sellLabel = this.add.text(220, height - 22, 'ПРОДАТЬ', this.hudStyle(9, '#f0c2b6'))
       .setOrigin(0.5).setDepth(13);
-    this.refreshHotkeyHighlights();
+
+    this.add.rectangle(waveButton.x, waveButton.y, waveButton.width, waveButton.height, 0x8a3d32)
+      .setStrokeStyle(2, 0xf3cf79).setInteractive({ useHandCursor: true }).setDepth(20)
+      .on('pointerdown', () => this.callNextWaveEarly());
+    this.add.text(waveButton.x, waveButton.y, 'ВОЛНА', this.hudStyle(13, '#fff0d9')).setOrigin(0.5).setDepth(21);
+    this.upcomingText = this.add.text(waveButton.x, waveButton.y - 22, '', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#f8e7b0',
+      align: 'center', wordWrap: { width: waveButton.width + 20 },
+    }).setOrigin(0.5, 1).setDepth(21);
+    this.drawBaseLives();
+  }
+
+  private drawBaseLives(): void {
+    const bar = GAMEPLAY_CONFIG.hud.livesBar;
+    const ratio = Phaser.Math.Clamp(this.baseHealth / GAMEPLAY_CONFIG.base.maxHealth, 0, 1);
+    this.baseLivesBar.clear();
+    this.baseLivesBar.fillStyle(0x1a2a28, 1);
+    this.baseLivesBar.fillRect(bar.x, bar.y, bar.width, bar.height);
+    this.baseLivesBar.fillStyle(ratio > 0.35 ? 0x91e0b4 : 0xe05a4f, 1);
+    this.baseLivesBar.fillRect(bar.x, bar.y, bar.width * ratio, bar.height);
+    this.baseLivesBar.lineStyle(1, 0x405450, 1);
+    this.baseLivesBar.strokeRect(bar.x, bar.y, bar.width, bar.height);
   }
 
   private createBuildSheet(width: number, height: number): void {
@@ -438,7 +436,7 @@ export class DefenseScene extends Phaser.Scene {
   private setShop(open: boolean): void {
     this.shopOpen = open;
     const openY = GAMEPLAY_CONFIG.scene.height
-      - GAMEPLAY_CONFIG.hud.dockHeight
+      - GAMEPLAY_CONFIG.hud.bottomReserve
       - GAMEPLAY_CONFIG.shop.panelHeight;
     const y = open ? openY : GAMEPLAY_CONFIG.scene.height;
     this.tweens.killTweensOf(this.shopPanel);
@@ -519,7 +517,7 @@ export class DefenseScene extends Phaser.Scene {
   private setBuildSheet(open: boolean, animate: boolean): void {
     this.buildSheetOpen = open;
     const openY = GAMEPLAY_CONFIG.scene.height
-      - GAMEPLAY_CONFIG.hud.dockHeight
+      - GAMEPLAY_CONFIG.hud.bottomReserve
       - GAMEPLAY_CONFIG.hud.buildSheetHeight;
     const y = open ? openY : GAMEPLAY_CONFIG.scene.height;
     this.tweens.killTweensOf(this.buildSheet);
@@ -533,19 +531,6 @@ export class DefenseScene extends Phaser.Scene {
       duration: 160,
       ease: 'Quad.easeOut',
     });
-  }
-
-  private addWeaponButton(kind: WeaponKind, x: number, y: number): void {
-    const labels: Record<WeaponKind, string> = {
-      pulse: '1 КАРАБИН',
-      rail: '2 РЕЛЬСА',
-      scatter: '3 ДРОБЬ',
-    };
-    const button = this.add.rectangle(x, y, 110, 32, 0x263b38)
-      .setStrokeStyle(1, 0x759182).setInteractive({ useHandCursor: true }).setDepth(12);
-    button.on('pointerdown', () => this.selectWeapon(kind));
-    this.add.text(x, y, labels[kind], this.hudStyle(9, '#d9e8dc')).setOrigin(0.5).setDepth(13);
-    this.weaponButtons.push(button);
   }
 
   private hudStyle(fontSize: number, color: string): Phaser.Types.GameObjects.Text.TextStyle {
@@ -581,7 +566,7 @@ export class DefenseScene extends Phaser.Scene {
     }) as Keys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
-      const dockTop = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight;
+      const dockTop = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.bottomReserve;
       if (this.mode !== 'playing' || currentlyOver.length > 0
         || pointer.y < GAMEPLAY_CONFIG.hud.topHeight || pointer.y > dockTop) return;
       this.pointerTarget = new Phaser.Math.Vector2(pointer.x, pointer.y);
@@ -596,7 +581,7 @@ export class DefenseScene extends Phaser.Scene {
 
   private createMobileButtons(): void {
     if (!this.sys.game.device.input.touch) return;
-    const buttonY = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight - 46;
+    const buttonY = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.bottomReserve - 46;
     const fire = this.add.circle(884, buttonY, 34, 0x8b593e, 0.9)
       .setStrokeStyle(2, 0xf1b57d).setInteractive().setDepth(20);
     const pulse = this.add.circle(805, buttonY, 29, 0x315b61, 0.9)
@@ -897,18 +882,6 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private refreshHotkeyHighlights(): void {
-    const playing = this.mode === 'playing';
-    const fireReady = playing && this.playerFireCooldown <= 0;
-    const pulseReady = playing && this.pulseCooldown <= 0;
-    this.fireKeyButton.setFillStyle(fireReady ? 0x8b593e : 0x263b38);
-    this.fireKeyButton.setAlpha(fireReady ? 1 : 0.45);
-    this.fireCooldownText.setText(this.playerFireCooldown > 0 ? this.playerFireCooldown.toFixed(1) : 'SPACE');
-    this.pulseKeyButton.setFillStyle(pulseReady ? 0x2f6d66 : 0x263b38);
-    this.pulseKeyButton.setAlpha(pulseReady ? 1 : 0.45);
-    this.pulseKeyLabel.setText(this.pulseCooldown > 0 ? this.pulseCooldown.toFixed(1) : 'Q');
-    this.buildButton.setFillStyle(this.buildSheetOpen ? 0x2f6a52 : 0x263b38);
-    this.buildButton.setAlpha(playing ? 1 : 0.5);
-    this.buildButton.setStrokeStyle(2, this.buildSheetOpen ? 0xf3cf79 : 0x8fbf9a);
     this.refreshWeaponButtons();
   }
 
@@ -1282,7 +1255,7 @@ export class DefenseScene extends Phaser.Scene {
       if (removeProjectile || projectile.lifetime <= 0 || projectile.body.x < 0
         || projectile.body.x > GAMEPLAY_CONFIG.scene.width
         || projectile.body.y < GAMEPLAY_CONFIG.hud.topHeight
-        || projectile.body.y > GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.dockHeight) {
+        || projectile.body.y > GAMEPLAY_CONFIG.scene.height) {
         projectile.body.destroy();
         this.projectiles.splice(index, 1);
       }
@@ -1326,13 +1299,7 @@ export class DefenseScene extends Phaser.Scene {
     this.wave += 1;
     this.waveDelay = 0;
     this.spawnQueue = [];
-    const count = Math.min(
-      GAMEPLAY_CONFIG.wave.initialEnemyCount + this.wave * GAMEPLAY_CONFIG.wave.enemiesPerWave,
-      GAMEPLAY_CONFIG.wave.maxEnemies,
-    );
-    for (let index = 0; index < count; index += 1) {
-      this.spawnQueue.push(this.enemyKindForSpawn(index, count));
-    }
+    this.enqueueWave(this.wave);
     this.spawnCooldown = GAMEPLAY_CONFIG.wave.initialSpawnDelay;
     this.statusText.setText(this.wave % GAMEPLAY_CONFIG.wave.bossEvery === 0
       ? `ВОЛНА ${this.wave}: БОСС В КОЛОННЕ`
@@ -1404,19 +1371,81 @@ export class DefenseScene extends Phaser.Scene {
     return Math.max(GAMEPLAY_CONFIG.wave.minimumSpawnInterval, baseInterval * phaseMultiplier);
   }
 
-  private enemyKindForSpawn(index: number, count: number): EnemyKind {
-    const wave = GAMEPLAY_CONFIG.wave;
-    if (this.wave % wave.bossEvery === 0 && index === count - 1) return 'boss';
-    if (this.wave >= wave.bruteStartWave && index % wave.bruteEvery === wave.bruteEvery - 1) return 'brute';
-    if (this.wave >= wave.raiderStartWave && index % wave.raiderEvery === wave.raiderEvery - 1) return 'raider';
-    if (this.wave >= wave.flyingStartWave && index % wave.flyingEvery === wave.flyingEvery - 1) return 'flyer';
+  private waveEnemyCount(wave: number): number {
+    return Math.min(
+      GAMEPLAY_CONFIG.wave.initialEnemyCount + wave * GAMEPLAY_CONFIG.wave.enemiesPerWave,
+      GAMEPLAY_CONFIG.wave.maxEnemies,
+    );
+  }
+
+  private enqueueWave(wave: number): void {
+    const count = this.waveEnemyCount(wave);
+    for (let index = 0; index < count; index += 1) {
+      this.spawnQueue.push(this.enemyKindForSpawn(index, count, wave));
+    }
+  }
+
+  private callNextWaveEarly(): void {
+    if (this.mode !== 'playing') return;
+    const fieldClear = this.spawnQueue.length === 0 && this.enemies.length === 0;
+    if (this.phase === 1 && this.wave === GAMEPLAY_CONFIG.phaseTwo.startsAfterWave) {
+      if (!fieldClear) {
+        this.statusText.setText('СНАЧАЛА ЗАКОНЧИ ВОЛНУ — ДАЛЬШЕ ФАЗА 2');
+        return;
+      }
+      this.beginPhaseTwoTransition();
+      return;
+    }
+    if (fieldClear) {
+      this.launchWave();
+    } else {
+      this.wave += 1;
+      this.enqueueWave(this.wave);
+      this.statusText.setText(`ВОЛНА ${this.wave} ВЫЗВАНА РАНЬШЕ`);
+    }
+    this.refreshHud();
+  }
+
+  private upcomingLabel(): string {
+    const waitingForPhase = this.phase === 1 && this.wave === GAMEPLAY_CONFIG.phaseTwo.startsAfterWave;
+    if (waitingForPhase) return 'ФАЗА 2';
+    return this.compositionText(this.wave + 1);
+  }
+
+  private compositionText(wave: number): string {
+    const count = this.waveEnemyCount(wave);
+    const totals = new Map<EnemyKind, number>();
+    for (let index = 0; index < count; index += 1) {
+      const kind = this.enemyKindForSpawn(index, count, wave);
+      totals.set(kind, (totals.get(kind) ?? 0) + 1);
+    }
+    const names: Record<EnemyKind, string> = {
+      scout: 'разведчик',
+      raider: 'налётчик',
+      brute: 'громила',
+      flyer: 'летун',
+      boss: 'босс',
+    };
+    const order: EnemyKind[] = ['scout', 'raider', 'brute', 'flyer', 'boss'];
+    return order
+      .filter((kind) => (totals.get(kind) ?? 0) > 0)
+      .map((kind) => `${names[kind]} ${totals.get(kind) ?? 0}`)
+      .join('\n');
+  }
+
+  private enemyKindForSpawn(index: number, count: number, wave = this.wave): EnemyKind {
+    const rules = GAMEPLAY_CONFIG.wave;
+    if (wave % rules.bossEvery === 0 && index === count - 1) return 'boss';
+    if (wave >= rules.bruteStartWave && index % rules.bruteEvery === rules.bruteEvery - 1) return 'brute';
+    if (wave >= rules.raiderStartWave && index % rules.raiderEvery === rules.raiderEvery - 1) return 'raider';
+    if (wave >= rules.flyingStartWave && index % rules.flyingEvery === rules.flyingEvery - 1) return 'flyer';
     return 'scout';
   }
 
   private flyingSpawnPoint(): Point {
     const minY = GAMEPLAY_CONFIG.hud.topHeight + GAMEPLAY_CONFIG.wave.flyingSpawnPadding;
     const maxY = GAMEPLAY_CONFIG.scene.height
-      - GAMEPLAY_CONFIG.hud.dockHeight
+      - GAMEPLAY_CONFIG.hud.bottomReserve
       - GAMEPLAY_CONFIG.wave.flyingSpawnPadding;
     return {
       x: GAMEPLAY_CONFIG.wave.flyingSpawnX,
@@ -1707,10 +1736,11 @@ export class DefenseScene extends Phaser.Scene {
 
   private updateHud(): void {
     this.waveText.setText(`ВОЛНА ${String(this.wave).padStart(2, '0')}`);
-    this.baseText.setText(`БАЗА ${this.baseHealth}`);
+    this.baseText.setText(String(this.baseHealth));
     this.coinsText.setText(`МОНЕТЫ ${this.coins}`);
-    this.playerText.setText(`ГЕРОЙ ${this.playerHealth}`);
     this.phaseText.setText(this.phase === 2 ? 'ФАЗА 2' : 'ФАЗА 1');
+    this.upcomingText.setText(this.upcomingLabel());
+    this.drawBaseLives();
     this.refreshUpgradeButton();
     this.refreshHotkeyHighlights();
   }

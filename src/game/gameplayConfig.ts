@@ -48,7 +48,7 @@ export const GAMEPLAY_CONFIG = {
     speed: 230,
     maxHealth: 100,
     start: { x: 88, y: 340 },
-    bounds: { left: 20, right: 22, top: 48, bottom: 92 },
+    bounds: { left: 20, right: 22, top: 48, bottom: 36 },
     radius: 15,
     barrelOffset: 15,
     barrelLength: 22,
@@ -224,8 +224,10 @@ export const GAMEPLAY_CONFIG = {
   },
   hud: {
     topHeight: 40,
-    dockHeight: 78,
+    bottomReserve: 20,
     buildSheetHeight: 54,
+    livesBar: { x: 188, y: 14, width: 110, height: 12 },
+    waveButton: { x: 848, y: 598, width: 156, height: 34 },
   },
   ui: {
     unselectedButtonAlpha: 0.82,
