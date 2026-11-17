@@ -128,12 +128,14 @@ export const GAMEPLAY_CONFIG = {
     regularExtraCollisionRadius: 10,
     stepSeconds: 0.2,
     flyerFlapSeconds: 0.14,
+    walkFrames: 4,
   } satisfies Record<EnemyKind, EnemySpec> & {
     collisionRadius: number;
     bossExtraCollisionRadius: number;
     regularExtraCollisionRadius: number;
     stepSeconds: number;
     flyerFlapSeconds: number;
+    walkFrames: number;
   },
   projectile: {
     playerRadius: 5,

@@ -148,44 +148,6 @@ function heroCape(art) {
   drawHeroSide(art, true);
 }
 
-function enemy(art, body, accent, eye, step = 0) {
-  const { rect, set } = art;
-  rect(8, 10, 16, 12, body);
-  rect(10, 8, 12, 4, accent);
-  rect(11, 13, 3, 3, eye);
-  rect(18, 13, 3, 3, eye);
-  set(12, 14, 0x1a120c);
-  set(19, 14, 0x1a120c);
-  rect(9, 22 - step * 2, 4, 5, 0x2a211c);
-  rect(19, 22 + step * 2, 4, 5, 0x2a211c);
-}
-
-function brute(step) {
-  return sized(40, 40, ({ rect, set }) => {
-    const lift = step * 2;
-    rect(8, 10, 24, 18, 0xc97067);
-    rect(12, 6, 16, 6, 0xdea098);
-    rect(13, 16, 5, 4, 0xffe4dc);
-    rect(22, 16, 5, 4, 0xffe4dc);
-    set(15, 18, 0x3a1614);
-    set(24, 18, 0x3a1614);
-    rect(10, 28 - lift, 6, 7, 0x5c302c);
-    rect(24, 28 + lift, 6, 7, 0x5c302c);
-    rect(6, 14, 4, 8, 0xa85a54);
-    rect(30, 14, 4, 8, 0xa85a54);
-  });
-}
-
-function flyer(flap) {
-  return sized(32, 32, (art) => {
-    enemy(art, 0x7eb6d8, 0xb7e4f6, 0xf4fbff, 0);
-    const wingY = flap ? 8 : 14;
-    art.rect(2, wingY, 6, 3, 0xd8f4ff);
-    art.rect(24, wingY, 6, 3, 0xd8f4ff);
-    art.rect(4, wingY - 2, 3, 2, 0x9fd0ea);
-    art.rect(25, wingY - 2, 3, 2, 0x9fd0ea);
-  });
-}
 const UNIT = 48;
 
 function drawSideUnit(art, frame, spec) {
@@ -294,20 +256,30 @@ function flyerFrame(frame) {
   });
 }
 
-function boss(step) {
-  return sized(48, 48, ({ rect, set }) => {
-    const lift = step * 2;
-    rect(10, 14, 28, 22, 0xc17193);
-    rect(14, 8, 20, 8, 0xe0a0bc);
-    rect(16, 20, 6, 5, 0xffe4f0);
-    rect(26, 20, 6, 5, 0xffe4f0);
-    set(18, 22, 0x4a1830);
-    set(28, 22, 0x4a1830);
-    rect(12, 36 - lift, 8, 8, 0x6e3450);
-    rect(28, 36 + lift, 8, 8, 0x6e3450);
-    rect(6, 16, 5, 14, 0x9a5878);
-    rect(37, 16, 5, 14, 0x9a5878);
-    rect(20, 4, 8, 5, 0xf2c6da);
+function facingUnit(spec, fromBack) {
+  return sized(UNIT, UNIT, (art) => {
+    const { rect, set } = art;
+    const bodyW = Math.max(16, spec.bodyW + 2);
+    const bodyLeft = 24 - Math.floor(bodyW / 2);
+    const bodyTop = 30 - spec.bodyH;
+    const headW = spec.headW + 2;
+    const headLeft = 24 - Math.floor(headW / 2);
+    const headTop = bodyTop - spec.headH + 2;
+    rect(bodyLeft + 2, 32, 5, 10, spec.dark);
+    rect(bodyLeft + bodyW - 7, 32, 5, 10, spec.dark);
+    rect(bodyLeft + 1, 41, 6, 3, spec.boot);
+    rect(bodyLeft + bodyW - 7, 41, 6, 3, spec.boot);
+    rect(bodyLeft, bodyTop, bodyW, spec.bodyH + 2, spec.body);
+    rect(bodyLeft + 2, bodyTop + 3, bodyW - 4, 4, spec.accent);
+    rect(headLeft, headTop, headW, spec.headH, fromBack ? spec.helm : spec.skin);
+    rect(headLeft, headTop, headW, 3, spec.helm);
+    if (fromBack) {
+      rect(bodyLeft + 4, bodyTop + 8, bodyW - 8, 5, spec.dark);
+    } else {
+      set(headLeft + 3, headTop + 5, 0x1a120c);
+      set(headLeft + headW - 4, headTop + 5, 0x1a120c);
+    }
+    if (spec.helm === 0xf2c6da) rect(headLeft, headTop - 4, headW, 3, 0xf2c6da);
   });
 }
 
@@ -318,22 +290,6 @@ const sprites = {
   'tile-slot.png': slot,
   'hero.png': sized(48, 48, hero),
   'hero-cape.png': sized(48, 48, heroCape),
-  'enemy-scout.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8, 0)),
-  'enemy-scout-step.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8, 1)),
-  'enemy-flyer.png': flyer(0),
-  'enemy-flyer-flap.png': flyer(1),
-  'enemy-raider.png': sized(32, 32, (art) => {
-    enemy(art, 0xe89562, 0xffb27a, 0xffe0c8, 0);
-    art.rect(6, 14, 4, 2, 0xffd0a4);
-  }),
-  'enemy-raider-step.png': sized(32, 32, (art) => {
-    enemy(art, 0xe89562, 0xffb27a, 0xffe0c8, 1);
-    art.rect(6, 14, 4, 2, 0xffd0a4);
-  }),
-  'enemy-brute.png': brute(0),
-  'enemy-brute-step.png': brute(1),
-  'enemy-boss.png': boss(0),
-  'enemy-boss-step.png': boss(1),
   'base.png': sized(48, 64, ({ rect }) => {
     rect(6, 18, 36, 40, 0x347e73);
     rect(10, 8, 28, 16, 0x4ea88d);
@@ -355,6 +311,10 @@ const sprites = {
     [0, 1, 2, 3].map((frame) => [`enemy-${kind}-${frame}.png`, sideUnit(frame, unitSpecs[kind])])
   ))),
   ...Object.fromEntries([0, 1, 2, 3].map((frame) => [`enemy-flyer-${frame}.png`, flyerFrame(frame)])),
+  ...Object.fromEntries(['scout', 'raider', 'brute', 'boss'].flatMap((kind) => [
+    [`enemy-${kind}-front.png`, facingUnit(unitSpecs[kind], false)],
+    [`enemy-${kind}-back.png`, facingUnit(unitSpecs[kind], true)],
+  ])),
   'projectile-homing.png': sized(16, 16, ({ rect }) => {
     rect(1, 6, 9, 4, 0xf3e27a);
     rect(9, 5, 5, 6, 0xfff6c4);

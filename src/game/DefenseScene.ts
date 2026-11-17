@@ -28,6 +28,7 @@ interface Enemy {
   slowFactor: number;
   animTime: number;
   animFrame: number;
+  pose: 'side' | 'front' | 'back';
 }
 
 interface Tower {
@@ -164,8 +165,7 @@ export class DefenseScene extends Phaser.Scene {
     for (const key of [
       'tile-grass', 'tile-path', 'tile-path-edge', 'tile-slot',
       'hero', 'hero-cape', 'base',
-      'enemy-scout', 'enemy-scout-step', 'enemy-raider', 'enemy-raider-step',
-      'enemy-brute', 'enemy-brute-step', 'enemy-boss', 'enemy-boss-step', 'enemy-flyer', 'enemy-flyer-flap',
+      ...this.enemyTextureKeys(),
       'tower-cannon', 'tower-rapid', 'tower-cryo', 'tower-homing',
       'tower-cannon-barrel', 'tower-rapid-barrel', 'tower-cryo-barrel', 'tower-homing-barrel',
       'projectile-homing',
@@ -972,21 +972,59 @@ export class DefenseScene extends Phaser.Scene {
     }
   }
 
+  private enemyTextureKeys(): string[] {
+    const kinds: EnemyKind[] = ['scout', 'raider', 'brute', 'boss', 'flyer'];
+    return kinds.flatMap((kind) => {
+      const frames = Array.from({ length: GAMEPLAY_CONFIG.enemy.walkFrames }, (_, frame) => `enemy-${kind}-${frame}`);
+      return kind === 'flyer' ? frames : [...frames, `enemy-${kind}-front`, `enemy-${kind}-back`];
+    });
+  }
+
   private animateEnemy(enemy: Enemy, seconds: number): void {
-    enemy.animTime += seconds;
-    const baseInterval = enemy.kind === 'flyer'
-      ? GAMEPLAY_CONFIG.enemy.flyerFlapSeconds
-      : GAMEPLAY_CONFIG.enemy.stepSeconds;
-    const interval = baseInterval * (enemy.slowTimer > 0 ? 1.6 : 1);
-    if (enemy.animTime < interval) return;
-    enemy.animTime = 0;
-    enemy.animFrame = enemy.animFrame === 0 ? 1 : 0;
+    if (enemy.kind === 'flyer' || this.pathStep(enemy).horizontal) {
+      enemy.animTime += seconds;
+      const baseInterval = enemy.kind === 'flyer'
+        ? GAMEPLAY_CONFIG.enemy.flyerFlapSeconds
+        : GAMEPLAY_CONFIG.enemy.stepSeconds;
+      const interval = baseInterval * (enemy.slowTimer > 0 ? 1.6 : 1);
+      if (enemy.animTime >= interval) {
+        enemy.animTime = 0;
+        enemy.animFrame = (enemy.animFrame + 1) % GAMEPLAY_CONFIG.enemy.walkFrames;
+      }
+    }
+    this.faceEnemy(enemy);
+  }
+
+  private pathStep(enemy: Enemy): { dx: number; dy: number; horizontal: boolean } {
+    const current = this.route[enemy.segment];
+    const next = this.route[enemy.segment + 1] ?? current;
+    const dx = (next?.x ?? enemy.body.x) - (current?.x ?? enemy.body.x);
+    const dy = (next?.y ?? enemy.body.y) - (current?.y ?? enemy.body.y);
+    return { dx, dy, horizontal: Math.abs(dx) >= Math.abs(dy) };
+  }
+
+  private faceEnemy(enemy: Enemy): void {
+    enemy.body.setRotation(0);
+    if (enemy.kind === 'flyer') {
+      enemy.pose = 'side';
+      enemy.body.setFlipX(this.basePoint.x - enemy.body.x < 0);
+      enemy.body.setTexture(this.enemyFrame(enemy));
+      return;
+    }
+    const step = this.pathStep(enemy);
+    if (step.horizontal) {
+      enemy.pose = 'side';
+      enemy.body.setFlipX(step.dx < 0);
+    } else {
+      enemy.pose = step.dy >= 0 ? 'front' : 'back';
+      enemy.body.setFlipX(false);
+    }
     enemy.body.setTexture(this.enemyFrame(enemy));
   }
 
   private enemyFrame(enemy: Enemy): string {
-    if (enemy.kind === 'flyer') return enemy.animFrame === 0 ? 'enemy-flyer' : 'enemy-flyer-flap';
-    return enemy.animFrame === 0 ? `enemy-${enemy.kind}` : `enemy-${enemy.kind}-step`;
+    if (enemy.kind === 'flyer' || enemy.pose === 'side') return `enemy-${enemy.kind}-${enemy.animFrame}`;
+    return `enemy-${enemy.kind}-${enemy.pose}`;
   }
 
   private moveEnemy(enemy: Enemy, seconds: number): void {
@@ -1232,7 +1270,7 @@ export class DefenseScene extends Phaser.Scene {
   private syncEnemyHealthBar(enemy: Enemy): void {
     const width = enemy.kind === 'boss' ? 44 : enemy.kind === 'brute' ? 36 : 32;
     const height = 5;
-    const lift = enemy.kind === 'boss' ? 30 : enemy.kind === 'brute' ? 26 : 22;
+    const lift = enemy.kind === 'boss' ? 36 : enemy.kind === 'brute' ? 34 : 30;
     const x = enemy.body.x - width / 2;
     const y = enemy.body.y - lift;
     const ratio = Phaser.Math.Clamp(enemy.health / enemy.maxHealth, 0, 1);
@@ -1372,7 +1410,7 @@ export class DefenseScene extends Phaser.Scene {
       : enemySpec;
     const scale = 1 + this.wave * GAMEPLAY_CONFIG.wave.healthScalePerWave;
     const start = kind === 'flyer' ? this.flyingSpawnPoint() : this.route[0];
-    const body = this.add.image(start.x, start.y, `enemy-${kind}`).setDepth(5);
+    const body = this.add.image(start.x, start.y, `enemy-${kind}-0`).setDepth(5).setRotation(0);
     if (isBoss) body.setScale(1.05);
     const healthBar = this.add.graphics().setDepth(6);
     const enemy: Enemy = {
@@ -1389,6 +1427,7 @@ export class DefenseScene extends Phaser.Scene {
       slowFactor: 1,
       animTime: 0,
       animFrame: 0,
+      pose: 'side',
     };
     this.enemies.push(enemy);
     this.syncEnemyHealthBar(enemy);
