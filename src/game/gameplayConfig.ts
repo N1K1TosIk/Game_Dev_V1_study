@@ -225,8 +225,9 @@ export const GAMEPLAY_CONFIG = {
   hud: {
     topHeight: 40,
     bottomReserve: 20,
-    buildSheetHeight: 54,
     livesBar: { x: 188, y: 14, width: 110, height: 12 },
+    slotMenu: { width: 168, rowHeight: 36, pad: 8 },
+    towerCard: { width: 176, height: 96 },
     waveButton: { x: 848, y: 598, width: 156, height: 34 },
   },
   ui: {

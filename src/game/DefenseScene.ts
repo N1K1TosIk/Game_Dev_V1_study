@@ -87,7 +87,6 @@ interface Keys {
   one: Phaser.Input.Keyboard.Key;
   two: Phaser.Input.Keyboard.Key;
   three: Phaser.Input.Keyboard.Key;
-  b: Phaser.Input.Keyboard.Key;
 }
 
 export class DefenseScene extends Phaser.Scene {
@@ -117,9 +116,13 @@ export class DefenseScene extends Phaser.Scene {
   private selectedTower: Tower | null = null;
   private selectedTowerKind: TowerKind = 'cannon';
   private selectedWeapon: WeaponKind = 'pulse';
-  private towerTypeButtons: Phaser.GameObjects.Rectangle[] = [];
-  private buildSheet!: Phaser.GameObjects.Container;
-  private buildSheetOpen = false;
+  private slotMenu: Phaser.GameObjects.Container | null = null;
+  private slotMenuTarget: BuildSlot | null = null;
+  private towerCard: Phaser.GameObjects.Container | null = null;
+  private cardTower: Tower | null = null;
+  private cardInfo: Phaser.GameObjects.Text | null = null;
+  private cardUpgradeLabel: Phaser.GameObjects.Text | null = null;
+  private cardSellLabel: Phaser.GameObjects.Text | null = null;
   private weaponButtons: Phaser.GameObjects.Rectangle[] = [];
   private baseLivesBar!: Phaser.GameObjects.Graphics;
   private upcomingText!: Phaser.GameObjects.Text;
@@ -141,10 +144,6 @@ export class DefenseScene extends Phaser.Scene {
   private coinsText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private phaseText!: Phaser.GameObjects.Text;
-  private upgradeButton!: Phaser.GameObjects.Rectangle;
-  private upgradeLabel!: Phaser.GameObjects.Text;
-  private sellButton!: Phaser.GameObjects.Rectangle;
-  private sellLabel!: Phaser.GameObjects.Text;
   private shopPanel!: Phaser.GameObjects.Container;
   private shopOpen = false;
   private heroSkinOwned = false;
@@ -328,23 +327,11 @@ export class DefenseScene extends Phaser.Scene {
     pause.on('pointerdown', () => this.togglePause());
     this.add.text(888, top / 2, 'ПАУЗА', this.hudStyle(10, '#e5efe5')).setOrigin(0.5).setDepth(13);
 
-    this.statusText = this.add.text(16, top + 8, 'Нажми B, чтобы открыть строительство', {
+    this.statusText = this.add.text(16, top + 8, 'Кликни площадку, чтобы выбрать башню.', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#c5d6cc',
       wordWrap: { width: 520 },
     }).setDepth(12);
-    this.createBuildSheet(width, height);
     this.createShop(width, height);
-
-    this.upgradeButton = this.add.rectangle(78, height - 22, 130, 28, 0x263b38)
-      .setStrokeStyle(1, 0x637d70).setInteractive({ useHandCursor: true }).setDepth(12);
-    this.upgradeButton.on('pointerdown', () => this.upgradeSelectedTower());
-    this.upgradeLabel = this.add.text(78, height - 22, 'УЛУЧШИТЬ', this.hudStyle(9, '#a6b8ae'))
-      .setOrigin(0.5).setDepth(13);
-    this.sellButton = this.add.rectangle(220, height - 22, 130, 28, 0x3a2a28)
-      .setStrokeStyle(1, 0xc98474).setInteractive({ useHandCursor: true }).setDepth(12);
-    this.sellButton.on('pointerdown', () => this.sellSelectedTower());
-    this.sellLabel = this.add.text(220, height - 22, 'ПРОДАТЬ', this.hudStyle(9, '#f0c2b6'))
-      .setOrigin(0.5).setDepth(13);
 
     this.add.rectangle(waveButton.x, waveButton.y, waveButton.width, waveButton.height, 0x8a3d32)
       .setStrokeStyle(2, 0xf3cf79).setInteractive({ useHandCursor: true }).setDepth(20)
@@ -369,39 +356,111 @@ export class DefenseScene extends Phaser.Scene {
     this.baseLivesBar.strokeRect(bar.x, bar.y, bar.width, bar.height);
   }
 
-  private createBuildSheet(width: number, height: number): void {
-    const sheetHeight = GAMEPLAY_CONFIG.hud.buildSheetHeight;
-    this.buildSheet = this.add.container(0, height).setDepth(15);
-    const panel = this.add.rectangle(width / 2, sheetHeight / 2, width, sheetHeight, 0x182428)
-      .setStrokeStyle(1, 0x405450)
-      .setInteractive();
-    const title = this.add.text(24, sheetHeight / 2, 'СТРОИТЕЛЬСТВО', this.hudStyle(11, '#d5e7c8')).setOrigin(0, 0.5);
-    this.buildSheet.add([panel, title]);
-    this.towerKinds().forEach((kind, index) => {
-      this.addTowerTypeButton(kind, 250 + index * 155, sheetHeight / 2);
-    });
-  }
-
   private towerKinds(): TowerKind[] {
     return ['cannon', 'rapid', 'cryo', 'homing'];
   }
 
-  private addTowerTypeButton(kind: TowerKind, x: number, y: number): void {
-    const spec = GAMEPLAY_CONFIG.tower[kind];
-    const button = this.add.rectangle(x, y, 136, 34, 0x263b38)
-      .setStrokeStyle(2, spec.color)
-      .setInteractive({ useHandCursor: true });
-    button.on('pointerdown', () => this.selectTowerKind(kind));
-    const icon = this.add.image(x - 48, y, `tower-${kind}`).setScale(0.5);
-    const label = this.add.text(x + 16, y, `${spec.shortLabel} · ${spec.cost}`, this.hudStyle(11, '#d9e8dc')).setOrigin(0.5);
-    this.buildSheet.add([button, icon, label]);
-    this.towerTypeButtons.push(button);
+  private menuAnchor(x: number, y: number, menuWidth: number, menuHeight: number): Point {
+    const margin = GAMEPLAY_CONFIG.hud.slotMenu.pad;
+    const left = x + 28 + menuWidth > GAMEPLAY_CONFIG.scene.width - margin
+      ? x - 28 - menuWidth
+      : x + 28;
+    const top = Phaser.Math.Clamp(
+      y - menuHeight / 2,
+      GAMEPLAY_CONFIG.hud.topHeight + margin,
+      GAMEPLAY_CONFIG.scene.height - menuHeight - margin,
+    );
+    return { x: left, y: top };
   }
 
-  private toggleBuildSheet(): void {
-    if (this.mode !== 'playing') return;
-    if (!this.buildSheetOpen) this.setShop(false);
-    this.setBuildSheet(!this.buildSheetOpen, true);
+  private closeSlotMenu(): void {
+    this.slotMenu?.destroy(true);
+    this.slotMenu = null;
+    this.slotMenuTarget = null;
+  }
+
+  private closeTowerCard(): void {
+    this.towerCard?.destroy(true);
+    this.towerCard = null;
+    this.cardTower = null;
+    this.cardInfo = null;
+    this.cardUpgradeLabel = null;
+    this.cardSellLabel = null;
+  }
+
+  private openSlotMenu(slot: BuildSlot): void {
+    this.closeTowerCard();
+    this.setShop(false);
+    this.closeSlotMenu();
+    const menu = GAMEPLAY_CONFIG.hud.slotMenu;
+    const height = this.towerKinds().length * menu.rowHeight + menu.pad;
+    const anchor = this.menuAnchor(slot.x, slot.y, menu.width, height);
+    const container = this.add.container(anchor.x, anchor.y).setDepth(30);
+    container.add(this.add.rectangle(menu.width / 2, height / 2, menu.width, height, 0x182428)
+      .setStrokeStyle(1, 0x8fbf9a)
+      .setInteractive());
+    this.towerKinds().forEach((kind, index) => container.add(this.slotMenuRow(slot, kind, index)));
+    this.slotMenu = container;
+    this.slotMenuTarget = slot;
+  }
+
+  private slotMenuRow(slot: BuildSlot, kind: TowerKind, index: number): Phaser.GameObjects.Container {
+    const menu = GAMEPLAY_CONFIG.hud.slotMenu;
+    const spec = GAMEPLAY_CONFIG.tower[kind];
+    const y = menu.pad + menu.rowHeight / 2 + index * menu.rowHeight;
+    const row = this.add.container(0, 0);
+    const button = this.add.rectangle(menu.width / 2, y, menu.width - 12, menu.rowHeight - 4, 0x263b38)
+      .setStrokeStyle(2, spec.color)
+      .setInteractive({ useHandCursor: true });
+    button.on('pointerdown', () => this.buildTower(slot, kind));
+    row.add([
+      button,
+      this.add.image(24, y, `tower-${kind}`).setScale(0.42),
+      this.add.text(46, y, `${spec.shortLabel} ${spec.cost}`, this.hudStyle(11, '#d9e8dc')).setOrigin(0, 0.5),
+    ]);
+    return row;
+  }
+
+  private openTowerCard(tower: Tower): void {
+    this.closeSlotMenu();
+    this.closeTowerCard();
+    this.selectTower(tower);
+    const card = GAMEPLAY_CONFIG.hud.towerCard;
+    const anchor = this.menuAnchor(tower.x, tower.y, card.width, card.height);
+    const container = this.add.container(anchor.x, anchor.y).setDepth(30);
+    container.add(this.add.rectangle(card.width / 2, card.height / 2, card.width, card.height, 0x182428)
+      .setStrokeStyle(1, GAMEPLAY_CONFIG.tower[tower.kind].color)
+      .setInteractive());
+    this.cardInfo = this.add.text(card.width / 2, 18, '', this.hudStyle(11, '#f4f5dd')).setOrigin(0.5);
+    const upgrade = this.add.rectangle(card.width / 2, 46, card.width - 16, 26, 0x263b38)
+      .setStrokeStyle(1, 0x8fbf9a)
+      .setInteractive({ useHandCursor: true });
+    this.cardUpgradeLabel = this.add.text(card.width / 2, 46, '', this.hudStyle(10, '#d9e8dc')).setOrigin(0.5);
+    const sell = this.add.rectangle(card.width / 2, 74, card.width - 16, 24, 0x3a2a28)
+      .setStrokeStyle(1, 0xc98474)
+      .setInteractive({ useHandCursor: true });
+    this.cardSellLabel = this.add.text(card.width / 2, 74, '', this.hudStyle(10, '#f0c2b6')).setOrigin(0.5);
+    upgrade.on('pointerdown', () => this.upgradeSelectedTower());
+    sell.on('pointerdown', () => this.sellSelectedTower());
+    container.add([this.cardInfo, upgrade, this.cardUpgradeLabel, sell, this.cardSellLabel]);
+    this.towerCard = container;
+    this.cardTower = tower;
+    this.fillTowerCard(tower);
+  }
+
+  private fillTowerCard(tower: Tower): void {
+    this.cardInfo?.setText(`УР. ${tower.level}  ·  РАДИУС ${Math.round(this.towerRange(tower))}`);
+    const maxed = tower.level >= GAMEPLAY_CONFIG.tower.upgradeMaximumLevel;
+    this.cardUpgradeLabel?.setText(maxed ? 'МАКС.' : `УЛУЧШИТЬ ${this.towerUpgradeCost(tower)}`);
+    this.cardSellLabel?.setText(`ПРОДАТЬ ${this.towerSellRefund(tower)}`);
+  }
+
+  private towerRange(tower: Tower): number {
+    const spec = GAMEPLAY_CONFIG.tower[tower.kind];
+    const gain = tower.kind === 'rapid'
+      ? GAMEPLAY_CONFIG.tower.rapidRangePerLevel
+      : GAMEPLAY_CONFIG.tower.otherRangePerLevel;
+    return spec.range + (tower.level - 1) * gain;
   }
 
   private createShop(width: number, height: number): void {
@@ -429,7 +488,10 @@ export class DefenseScene extends Phaser.Scene {
 
   private toggleShop(): void {
     if (this.mode !== 'playing') return;
-    if (!this.shopOpen) this.setBuildSheet(false, true);
+    if (!this.shopOpen) {
+      this.closeSlotMenu();
+      this.closeTowerCard();
+    }
     this.setShop(!this.shopOpen);
   }
 
@@ -514,25 +576,6 @@ export class DefenseScene extends Phaser.Scene {
     }
   }
 
-  private setBuildSheet(open: boolean, animate: boolean): void {
-    this.buildSheetOpen = open;
-    const openY = GAMEPLAY_CONFIG.scene.height
-      - GAMEPLAY_CONFIG.hud.bottomReserve
-      - GAMEPLAY_CONFIG.hud.buildSheetHeight;
-    const y = open ? openY : GAMEPLAY_CONFIG.scene.height;
-    this.tweens.killTweensOf(this.buildSheet);
-    if (!animate) {
-      this.buildSheet.y = y;
-      return;
-    }
-    this.tweens.add({
-      targets: this.buildSheet,
-      y,
-      duration: 160,
-      ease: 'Quad.easeOut',
-    });
-  }
-
   private hudStyle(fontSize: number, color: string): Phaser.Types.GameObjects.Text.TextStyle {
     return { fontFamily: 'Trebuchet MS, sans-serif', fontSize: `${fontSize}px`, fontStyle: 'bold', color };
   }
@@ -562,11 +605,16 @@ export class DefenseScene extends Phaser.Scene {
       one: Phaser.Input.Keyboard.KeyCodes.ONE,
       two: Phaser.Input.Keyboard.KeyCodes.TWO,
       three: Phaser.Input.Keyboard.KeyCodes.THREE,
-      b: Phaser.Input.Keyboard.KeyCodes.B,
     }) as Keys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
       const dockTop = GAMEPLAY_CONFIG.scene.height - GAMEPLAY_CONFIG.hud.bottomReserve;
+      if (this.mode === 'playing' && currentlyOver.length === 0) {
+        this.closeSlotMenu();
+        this.closeTowerCard();
+        this.selectedTower = null;
+        this.showTowerRange(null);
+      }
       if (this.mode !== 'playing' || currentlyOver.length > 0
         || pointer.y < GAMEPLAY_CONFIG.hud.topHeight || pointer.y > dockTop) return;
       this.pointerTarget = new Phaser.Math.Vector2(pointer.x, pointer.y);
@@ -625,7 +673,7 @@ export class DefenseScene extends Phaser.Scene {
         align: 'center', lineSpacing: 9,
       }).setOrigin(0.5);
     const controls = this.add.text(GAMEPLAY_CONFIG.scene.width / 2, 350,
-      'WASD — движение   •   1 2 3 — оружие   •   Пробел — огонь   •   Q — ЭМИ   •   B — стройка   •   P — пауза', {
+      'WASD — движение   •   1 2 3 — оружие   •   Пробел — огонь   •   Q — ЭМИ   •   Кликни площадку — стройка   •   P — пауза', {
         fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: '#91aaa0',
       }).setOrigin(0.5);
     this.modal.add([overlay, panel, title, pitch, controls]);
@@ -681,11 +729,11 @@ export class DefenseScene extends Phaser.Scene {
     this.selectedTowerKind = 'cannon';
     this.selectedWeapon = 'pulse';
     this.selectedTower = null;
-    this.setBuildSheet(false, false);
+    this.closeSlotMenu();
+    this.closeTowerCard();
     this.setShop(false);
     this.charmActive = false;
     this.refreshShopLabels();
-    this.refreshTowerTypeButtons();
     this.refreshWeaponButtons();
     this.player.setPosition(this.playerX, this.playerY).setVisible(true).clearTint().setRotation(0).setFlipX(false);
     this.pointerTarget = null;
@@ -741,7 +789,6 @@ export class DefenseScene extends Phaser.Scene {
       this.usePulse();
       this.pulseButtonHeld = false;
     }
-    if (Phaser.Input.Keyboard.JustDown(this.keys.b)) this.toggleBuildSheet();
     if (Phaser.Input.Keyboard.JustDown(this.keys.one)) this.selectWeapon('pulse');
     if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.selectWeapon('rail');
     if (Phaser.Input.Keyboard.JustDown(this.keys.three)) this.selectWeapon('scatter');
@@ -834,26 +881,6 @@ export class DefenseScene extends Phaser.Scene {
       }, angle + spreadIndex * (spec.spreadAngle ?? 0));
     }
     this.playerFireCooldown = spec.cooldown;
-  }
-
-  private selectTowerKind(kind: TowerKind): void {
-    this.selectedTowerKind = kind;
-    this.selectedTower = null;
-    this.showTowerRange(null);
-    this.refreshTowerTypeButtons();
-    const spec = GAMEPLAY_CONFIG.tower[kind];
-    this.statusText.setText(`${spec.name.toUpperCase()} · ${spec.cost} МОНЕТ · ${spec.upgradeDescription}`);
-    this.refreshUpgradeButton();
-  }
-
-  private refreshTowerTypeButtons(): void {
-    this.towerTypeButtons.forEach((button, index) => {
-      const kind = this.towerKinds()[index];
-      if (!kind) return;
-      const selected = kind === this.selectedTowerKind;
-      button.setFillStyle(selected ? GAMEPLAY_CONFIG.tower[kind].color : 0x263b38);
-      button.setAlpha(selected ? 1 : GAMEPLAY_CONFIG.ui.unselectedButtonAlpha);
-    });
   }
 
   private selectWeapon(kind: WeaponKind): void {
@@ -1489,38 +1516,51 @@ export class DefenseScene extends Phaser.Scene {
     const slot = this.slots.find((item) => item.x === x && item.y === y);
     if (!slot) return;
     if (slot.tower) {
-      this.selectTower(slot.tower);
-      this.setBuildSheet(false, true);
+      this.openTowerCard(slot.tower);
       return;
     }
-    if (!this.buildSheetOpen) {
-      this.statusText.setText('НАЖМИ B, ЧТОБЫ ОТКРЫТЬ СТРОИТЕЛЬСТВО');
+    if (this.slotMenuTarget === slot) {
+      this.closeSlotMenu();
       return;
     }
-    const spec = GAMEPLAY_CONFIG.tower[this.selectedTowerKind];
+    this.openSlotMenu(slot);
+  }
+
+  private buildTower(slot: BuildSlot, kind: TowerKind): void {
+    if (this.mode !== 'playing' || slot.tower) return;
+    const spec = GAMEPLAY_CONFIG.tower[kind];
     if (this.coins < spec.cost) {
       this.statusText.setText(`НУЖНО ${spec.cost} МОНЕТ ДЛЯ ${spec.name.toUpperCase()}`);
       return;
     }
-
     this.coins -= spec.cost;
-    const rangeRing = this.add.circle(x, y, spec.range, spec.color, 0.08)
+    this.selectedTowerKind = kind;
+    const tower = this.placeTower(slot, kind, spec.cost);
+    this.closeSlotMenu();
+    this.statusText.setText(`${spec.name.toUpperCase()} УСТАНОВЛЕНА · УР. 1`);
+    this.openTowerCard(tower);
+    this.refreshHud();
+  }
+
+  private placeTower(slot: BuildSlot, kind: TowerKind, invested: number): Tower {
+    const spec = GAMEPLAY_CONFIG.tower[kind];
+    const rangeRing = this.add.circle(slot.x, slot.y, spec.range, spec.color, 0.08)
       .setStrokeStyle(1, spec.color, 0.6).setVisible(false).setDepth(1);
-    const sprite = this.add.image(x, y, `tower-${this.selectedTowerKind}`)
+    const sprite = this.add.image(slot.x, slot.y, `tower-${kind}`)
       .setDepth(5)
       .setInteractive({ useHandCursor: true });
-    const barrel = this.add.image(x, y - 6, `tower-${this.selectedTowerKind}-barrel`)
+    const barrel = this.add.image(slot.x, slot.y - 6, `tower-${kind}-barrel`)
       .setOrigin(0.12, 0.5)
       .setDepth(5.5);
-    const levelLabel = this.add.text(x, y + 26, '1', {
+    const levelLabel = this.add.text(slot.x, slot.y + 26, '1', {
       fontFamily: 'Trebuchet MS, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#f4f5dd',
     }).setOrigin(0.5).setDepth(6);
     const tower: Tower = {
-      x,
-      y,
-      kind: this.selectedTowerKind,
+      x: slot.x,
+      y: slot.y,
+      kind,
       level: 1,
-      invested: spec.cost,
+      invested,
       cooldown: GAMEPLAY_CONFIG.tower.initialCooldown,
       sprite,
       barrel,
@@ -1529,17 +1569,13 @@ export class DefenseScene extends Phaser.Scene {
     };
     sprite.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Event) => {
       event.stopPropagation();
-      this.selectTower(tower);
+      this.openTowerCard(tower);
     });
     slot.tower = tower;
     slot.marker.setVisible(false);
     slot.label.setVisible(false);
     this.towers.push(tower);
-    this.selectedTower = tower;
-    this.showTowerRange(tower);
-    this.statusText.setText(`${spec.name.toUpperCase()} УСТАНОВЛЕНА · УР. 1`);
-    this.setBuildSheet(false, true);
-    this.refreshHud();
+    return tower;
   }
 
   private selectTower(tower: Tower): void {
@@ -1621,27 +1657,19 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private refreshUpgradeButton(): void {
-    if (!this.selectedTower) {
-      this.upgradeLabel.setText('УЛУЧШИТЬ');
-      this.sellLabel.setText('ПРОДАТЬ');
-      this.sellButton.setAlpha(0.45);
+    if (!this.cardTower || !this.cardInfo) return;
+    if (!this.towers.includes(this.cardTower)) {
+      this.closeTowerCard();
       return;
     }
-    const refund = this.towerSellRefund(this.selectedTower);
-    this.sellLabel.setText(`ПРОДАТЬ ${refund}`);
-    this.sellButton.setAlpha(1);
-    if (this.selectedTower.level >= GAMEPLAY_CONFIG.tower.upgradeMaximumLevel) {
-      this.upgradeLabel.setText('МАКС.');
-      return;
-    }
-    const cost = this.towerUpgradeCost(this.selectedTower);
-    this.upgradeLabel.setText(`+УР ${cost}`);
+    this.fillTowerCard(this.cardTower);
   }
 
   private togglePause(): void {
     if (this.mode === 'playing') {
       this.setShop(false);
-      this.setBuildSheet(false, false);
+      this.closeSlotMenu();
+      this.closeTowerCard();
       this.mode = 'paused';
       this.modal = this.add.container(0, 0).setDepth(100);
       const overlay = this.add.rectangle(
@@ -1690,6 +1718,8 @@ export class DefenseScene extends Phaser.Scene {
   private endGame(reason: string): void {
     if (this.mode === 'gameover') return;
     this.setShop(false);
+    this.closeSlotMenu();
+    this.closeTowerCard();
     this.mode = 'gameover';
     this.pointerTarget = null;
     const newRecord = this.wave > this.bestWave;
