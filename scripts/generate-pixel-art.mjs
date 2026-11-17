@@ -120,25 +120,32 @@ const slot = sized(32, 32, ({ rect, disc, set }) => {
   [[6, 6], [24, 6], [6, 24], [24, 24]].forEach(([x, y]) => set(x, y, 0xd5e7c8));
 });
 
-function hero(art) {
+function drawHeroSide(art, cape) {
   const { rect, set } = art;
-  rect(11, 8, 10, 12, 0x1f8f86);
-  rect(12, 9, 8, 6, 0x40d9bd);
-  rect(14, 10, 5, 2, 0xe8fff6);
-  rect(18, 13, 10, 3, 0xf4fff8);
-  rect(26, 12, 3, 5, 0xc9ddd4);
-  rect(10, 18, 12, 6, 0x146962);
-  rect(11, 24, 4, 5, 0x0e4448);
-  rect(17, 24, 4, 5, 0x0e4448);
-  set(13, 12, 0x08322e);
-  set(16, 12, 0x08322e);
+  if (cape) {
+    rect(6, 16, 8, 20, 0x8d3b4a);
+    rect(4, 20, 4, 14, 0xc45b68);
+  }
+  rect(14, 30, 5, 10, 0x0e4448);
+  rect(13, 39, 6, 3, 0x08322e);
+  rect(18, 18, 14, 14, 0x1f8f86);
+  rect(20, 20, 10, 5, 0x40d9bd);
+  rect(28, 8, 10, 10, 0xf0d0a0);
+  rect(28, 8, 10, 3, 0x146962);
+  set(35, 13, 0x08322e);
+  set(36, 13, 0xe8fff6);
+  rect(24, 29, 5, 11, 0x0e4448);
+  rect(27, 39, 7, 3, 0x08322e);
+  rect(32, 23, 10, 3, 0xf4fff8);
+  rect(40, 21, 3, 7, 0xc9ddd4);
+}
+
+function hero(art) {
+  drawHeroSide(art, false);
 }
 
 function heroCape(art) {
-  hero(art);
-  art.rect(6, 9, 5, 16, 0x8d3b4a);
-  art.rect(5, 11, 3, 12, 0xc45b68);
-  art.rect(8, 8, 4, 3, 0xf0d0a0);
+  drawHeroSide(art, true);
 }
 
 function enemy(art, body, accent, eye, step = 0) {
@@ -247,6 +254,31 @@ const unitSpecs = {
   },
 };
 
+function towerKeep(wall, dark, light, windowColor) {
+  return sized(48, 48, ({ rect }) => {
+    rect(6, 36, 36, 8, dark);
+    rect(8, 38, 32, 4, light);
+    rect(12, 18, 24, 20, wall);
+    rect(14, 20, 20, 6, light);
+    rect(12, 12, 6, 8, wall);
+    rect(21, 12, 6, 8, wall);
+    rect(30, 12, 6, 8, wall);
+    rect(20, 28, 8, 10, dark);
+    rect(15, 22, 5, 4, windowColor);
+    rect(28, 22, 5, 4, windowColor);
+  });
+}
+
+function towerBarrel(body, tip) {
+  return sized(28, 12, ({ rect }) => {
+    rect(0, 4, 6, 4, 0x3a2a22);
+    rect(4, 3, 16, 6, body);
+    rect(6, 4, 8, 2, tip);
+    rect(18, 2, 8, 8, tip);
+    rect(24, 4, 3, 4, 0x1a120c);
+  });
+}
+
 function flyerFrame(frame) {
   return sized(UNIT, UNIT, (art) => {
     drawSideUnit(art, frame, {
@@ -284,8 +316,8 @@ const sprites = {
   'tile-path.png': path,
   'tile-path-edge.png': pathEdge,
   'tile-slot.png': slot,
-  'hero.png': sized(32, 32, hero),
-  'hero-cape.png': sized(32, 32, heroCape),
+  'hero.png': sized(48, 48, hero),
+  'hero-cape.png': sized(48, 48, heroCape),
   'enemy-scout.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8, 0)),
   'enemy-scout-step.png': sized(32, 32, (art) => enemy(art, 0xe5c36d, 0xf0d48a, 0xfff6d8, 1)),
   'enemy-flyer.png': flyer(0),
@@ -311,31 +343,14 @@ const sprites = {
     rect(32, 12, 8, 6, 0xd0fff0);
     rect(20, 22, 8, 4, 0x1d4e46);
   }),
-  'tower-cannon.png': sized(40, 40, ({ rect, disc }) => {
-    disc(16, 20, 11, 0xc77b54);
-    disc(16, 20, 6, 0x6d3d2c);
-    rect(18, 17, 18, 6, 0xffbd75);
-    rect(32, 15, 5, 10, 0x8a4e34);
-  }),
-  'tower-rapid.png': sized(40, 40, ({ rect, disc }) => {
-    disc(16, 20, 11, 0x4ea88d);
-    disc(16, 20, 6, 0x1d4e46);
-    rect(18, 14, 16, 4, 0x8ef5c8);
-    rect(18, 22, 16, 4, 0x8ef5c8);
-  }),
-  'tower-cryo.png': sized(40, 40, ({ rect, disc }) => {
-    disc(16, 20, 11, 0x598fc2);
-    disc(16, 20, 6, 0xd8f4ff);
-    rect(20, 17, 16, 6, 0x8bdcff);
-    rect(14, 8, 4, 6, 0xeaf8ff);
-  }),
-  'tower-homing.png': sized(40, 40, ({ rect, disc }) => {
-    disc(16, 20, 11, 0xc4a24a);
-    disc(16, 20, 6, 0x6a5420);
-    rect(20, 17, 14, 6, 0xf3e27a);
-    rect(30, 15, 6, 3, 0xfff6c4);
-    rect(30, 22, 6, 3, 0xfff6c4);
-  }),
+  'tower-cannon.png': towerKeep(0xc77b54, 0x6d3d2c, 0xffbd75, 0x3a2018),
+  'tower-cannon-barrel.png': towerBarrel(0x8a4e34, 0xffbd75),
+  'tower-rapid.png': towerKeep(0x4ea88d, 0x1d4e46, 0x8ef5c8, 0x163832),
+  'tower-rapid-barrel.png': towerBarrel(0x1d4e46, 0x8ef5c8),
+  'tower-cryo.png': towerKeep(0x598fc2, 0x2a4a68, 0x8bdcff, 0xd8f4ff),
+  'tower-cryo-barrel.png': towerBarrel(0x2a4a68, 0x8bdcff),
+  'tower-homing.png': towerKeep(0xc4a24a, 0x6a5420, 0xf3e27a, 0x3a3010),
+  'tower-homing-barrel.png': towerBarrel(0x6a5420, 0xf3e27a),
   ...Object.fromEntries(['scout', 'raider', 'brute', 'boss'].flatMap((kind) => (
     [0, 1, 2, 3].map((frame) => [`enemy-${kind}-${frame}.png`, sideUnit(frame, unitSpecs[kind])])
   ))),
